@@ -463,7 +463,7 @@ class ProjectEditor(object):
                         self._seq_pos = (self._seq_pos + row_keys[k]) % len(self.project.patterns_seq)
                 elif self.project.patterns and self._pattern:
                     self._pattern = self.project.patterns[
-                        (self.project.patterns.index(self._pattern) + row_keys[k])
+                        (self._pattern_idx() + row_keys[k])
                         % len(self.project.patterns)
                     ]
                     if self.player.playing and issubclass(self.player.data.__class__, project.Pattern):
@@ -482,7 +482,7 @@ class ProjectEditor(object):
                     if len(patterns) < 2:
                         return
                     self.push_undo()
-                    i = patterns.index(self._pattern)
+                    i = self._pattern_idx()
                     j = (i + move_pattern_keys[k]) % len(patterns)
                     patterns[i], patterns[j] = patterns[j], patterns[i]
             elif k in [keys.KEY_LEFT, keys.KEY_RIGHT]:
@@ -562,14 +562,11 @@ class ProjectEditor(object):
     def _new_pattern(self, name):
         self.push_undo()
         pattern = project.create_empty_pattern()
-        if name:
-            pattern.name = name
-        if self._pattern:
-            i = self.project.patterns.index(self._pattern)
-        else:
-            i = -1
-
-        self.project.patterns.insert(i+1, pattern)
+        if name: pattern.name = name
+        self.project.patterns.insert(
+            0 if self._pattern is None else self._pattern_idx()+1,
+            pattern
+        )
         self._pattern = pattern
 
     def _duplicate_pattern(self):
@@ -586,8 +583,7 @@ class ProjectEditor(object):
             i += 1
             tmp_name = '{} ({})'.format(new_pattern.name, i)
         new_pattern.name = tmp_name
-        i = self.project.patterns.index(self._pattern)
-        self.project.patterns.insert(i+1, new_pattern)
+        self.project.patterns.insert(self._pattern_idx()+1, new_pattern)
     
     def _edit_pattern(self):
         if self._pattern is None:
@@ -601,27 +597,23 @@ class ProjectEditor(object):
         ).run()
     
     def _remove_pattern(self):
-        if self._pattern is None:
-            return
+        if self._pattern is None: return
 
         self.push_undo()
-        patterns = self.project.patterns
-        i = patterns.index(self._pattern)
-        patterns.remove(self._pattern)
-
-        self.project.patterns_seq = [p for p in self.project.patterns_seq 
-                                     if p != self._pattern.uid]
-        if not patterns:
-            self._pattern = None
-            return
-        if i < len(patterns):
-            self._pattern = patterns[i]
+        project = self.project
+        i = self._pattern_idx()
+        project.remove_pattern(self._pattern)
+        if project.patterns:
+            self._pattern = project.patterns[min(i, len(project.patterns)-1)]
         else:
-            self._pattern = patterns[-1]
+            self._pattern = None
     
     def _set_bpm(self, bpm):
         self.push_undo()
         set_bpm(bpm, self.project)
+    
+    def _pattern_idx(self):
+        return self.project.patterns.index(self._pattern)
   
 
 def set_bpm(bpm, project):

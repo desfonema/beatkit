@@ -464,6 +464,12 @@ class Project(object):
         for pattern in self.patterns:
             pattern.mute()
 
+    def remove_pattern(self, pattern):
+        self.patterns.remove(pattern)
+        self.patterns_seq = [p for p in self.patterns_seq if p != pattern]
+        self.rebuild_sequence()
+        
+
 
 def create_empty_pattern():
     channels = [

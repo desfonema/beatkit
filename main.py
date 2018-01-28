@@ -3,7 +3,6 @@ import threading
 import time
 import json
 from copy import deepcopy
-
 import jack
 
 from audio import alsaseq
@@ -20,7 +19,7 @@ def log(data):
     f.close()
 
 
-#jack.attach("beatkit")
+jack_client = jack.Client("beatkit")
 EMPTY_NOTE = ' '
 MIDI_MIDDLE = 60
 
@@ -42,16 +41,21 @@ class PlayerThread(threading.Thread):
         self.data = None
         self._run = threading.Event()
         self._run.set()
-        self.playing = False
         self._startime = 0
 
     def run(self):
         prev_time = self.get_time()
+        mute_channels = False
         while self._run.is_set():
 
-            if not self.playing:
+            if not self.playing():
+                if mute_channels:
+                    self.mute()
+                    mute_channels = False
                 time.sleep(0.1)
                 continue
+    
+            mute_channels = True
             
             curr_time = self.get_time()
             if prev_time > curr_time:
@@ -65,20 +69,19 @@ class PlayerThread(threading.Thread):
         self.data = data
         connections.connect()
         self.data.bind()
-
-        if self.playing:
-            self._startime = 0
-        else:
-            self._startime = time.time()
-        self.playing = True
+        jack_client.transport_start()
 
     def stop(self):
-        self.playing = False
+        jack_client.transport_stop()
+        jack_client.transport_locate(0)
         self.mute()
 
     def quit(self):
         self._run.clear()
         self.mute()
+    
+    def playing(self):
+        return jack_client.transport_state == jack.ROLLING
 
     def mute(self):
         if self.data:
@@ -86,17 +89,7 @@ class PlayerThread(threading.Thread):
 
     def get_time(self):
         # Get the time on the song. 
-        #return float(jack.get_current_transport_frame()) 
-        #             / jack.get_sample_rate()
-        if self.playing:
-            return (time.time()-self._startime) * (BPM.get()/60.)*2
-        else:
-            return 0
-
-    def get_state(self):
-        # Return true for play, false for stop
-        #return jack.get_transport_state()
-        return True
+        return float(jack_client.transport_frame)/jack_client.samplerate * (BPM.get()/60.)*2
 
 
 class ChannelEditor(object):
@@ -301,7 +294,7 @@ class PatternEditor(object):
                         events.put(events.MidiEvent(alsaseq.MIDI_EVENT_NOTE_ON, 0, midi_note, 127))
                         key_to_midi_state[midi_note] = True
                 elif c == " ":
-                    if self.player.playing:
+                    if self.player.playing():
                         self.player.stop()
                     else:
                         self.player.play(self.pattern)
@@ -481,7 +474,7 @@ class ProjectEditor(object):
                         (self._pattern_idx() + row_keys[k])
                         % len(self.project.patterns)
                     ]
-                    if self.player.playing and issubclass(self.player.data.__class__, project.Pattern):
+                    if self.player.playing() and issubclass(self.player.data.__class__, project.Pattern):
                         self.player.mute()
                         self.player.play(self._pattern)
             elif k in move_pattern_keys:
@@ -521,7 +514,7 @@ class ProjectEditor(object):
             elif k == keys.KEY_ENTER:
                 self._edit_pattern()
             elif c == " ":
-                if self.player.playing:
+                if self.player.playing():
                     self.player.stop()
                 else:
                     self.player.play(self._pattern)
@@ -532,7 +525,7 @@ class ProjectEditor(object):
                 self.project.rebuild_sequence()
             elif c == 'p':
                 self.project.rebuild_sequence()
-                if self.player.playing:
+                if self.player.playing():
                     self.player.stop()
                 self.player.play(self.project)
             else:

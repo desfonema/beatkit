@@ -51,6 +51,7 @@ class alsaseq:
         return {'dest': {'client': 0, 'port': 0}, 'data': {'note': {'note': 0, 'velocity': 0, 'duration': 0, 'off_velocity': 0, 'channel': 0}, 'control': {'value': 0, 'param': 0, 'channel': 0}}, 'queue': 0, 'source': {'client': 0, 'port': 0}, 'tag': 0, 'flags': 0, 'time': {'tick': 0, 'time': {'tv_sec': 0, 'tv_nsec': 0}}, 'type': 0}
 
     def note_on(self, port, note, channel, velocity):
+        if not isinstance(port, int): return
         ev = self.empty_event()
         ev['type'] = MIDI_EVENT_NOTE_ON
         ev['queue'] = 253

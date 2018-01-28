@@ -114,24 +114,31 @@ class ChannelEditor(object):
             self.refresh()
             if self.pos == 0:
                 k, v = scr.textbox(0, 15, 30, channel.name, edit=True)
-                channel.name = v
+                if k: channel.name = v
             elif self.pos == 1:
                 options = [c for c in connections.get_ports() if 'beatkit' not in c]
                 k, v = scr.listbox(1, 15, 30, channel.midi_port, options=options, edit=True)
-                channel.midi_port = v
-                channel.bind()
+                if k:
+                    channel.midi_port = v
+                    channel.bind()
             elif self.pos == 2:
                 k, v = scr.textbox(2, 15, 30, channel.midi_channel, edit=True)
-                if v.isdigit():
+                if k and v.isdigit():
                     channel.midi_channel = int(v)
             elif self.pos == 3:
                 k, v = scr.textbox(3, 15, 30, channel.note, edit=True)
-                if v.isdigit():
+                if k and v.isdigit():
                     channel.note = int(v)
+
             if k in [keys.KEY_TAB, keys.KEY_DOWN]:
                 self.pos = (self.pos + 1) % fields
             elif k in [keys.KEY_STAB, keys.KEY_UP]:
                 self.pos = (self.pos - 1) % fields
+            elif not k and v.event_type == events.EVENT_MIDI:
+                if v.midi_event_type == alsaseq.MIDI_EVENT_NOTE_ON:
+                    channel.note_on(-1, v.note, 127)
+                elif v.midi_event_type == alsaseq.MIDI_EVENT_NOTE_OFF:
+                    channel.note_off(-1, v.note)
             elif k in [keys.KEY_ENTER, keys.KEY_ESC]:
                 break
                 
@@ -163,6 +170,7 @@ class PatternEditor(object):
         self.pattern = pattern
         self.pad = pad
         self.player = player
+        self.rec = True
         self.delete_keys = ['A', 'S', 'D', 'F']
         self._undo_buffer = [self.pattern.dump()]
 
@@ -222,13 +230,14 @@ class PatternEditor(object):
 
             if ev.event_type == events.EVENT_MIDI:
                 # Process input values
+                ntime = self.player.get_time() if self.rec else -1
                 if ev.midi_event_type == alsaseq.MIDI_EVENT_NOTE_ON:
                     if ev.note not in midi_state:
-                        channel.note_on(self.player.get_time(), ev.note, 127)
+                        channel.note_on(ntime, ev.note, 127)
                         midi_state.add(ev.note)
                 elif ev.midi_event_type == alsaseq.MIDI_EVENT_NOTE_OFF:
                     if ev.note in midi_state:
-                        channel.note_off(self.player.get_time(), ev.note)
+                        channel.note_off(ntime, ev.note)
                         midi_state.remove(ev.note)
 
                     if not midi_state:
@@ -306,7 +315,7 @@ class PatternEditor(object):
                 elif k in shift_channel_keys:
                     channel.shift(shift_channel_keys[k])
                 elif k in offset_keys:
-                    self._channel_offset = (self._channel_offset + offset_keys[k]) % len(delete_keys)
+                    self._channel_offset = (self._channel_offset + offset_keys[k]) % (self.pattern.len / len(delete_keys))
                 elif c in octave_keys:
                     key_to_midi_octave += octave_keys[c]
                 elif c in delete_keys:
@@ -319,22 +328,17 @@ class PatternEditor(object):
                         for i in range(len(delete_keys)):
                             channel.quantize(pos + i, c)
                         self.push_undo()
+                elif c == 'R':
+                    self.rec = not self.rec
                 elif k == keys.KEY_BACKSPACE:
                     self.pop_undo()
                 elif k == keys.KEY_ENTER:
                     ChannelEditor(pad, channel).run()
                 elif c == 'q' or k == keys.KEY_ESC:
                     break
-                else:
-                    # Print unhandled event
-                    pad.addstr(10,0,c + '                ')
-                pad.addstr(15,0,'KEY DN: ' +str(k) + '                ')
-                pad.addstr(17,0,'octave: {}   '.format(key_to_midi_octave))
-
             elif ev.event_type == events.EVENT_KEY_UP:
                 k = ev.key_code
                 c = chr(k & 0xff)
-                pad.addstr(16,0,'KEY UP: ' +str(k) + '                ')
                 if c in key_to_midi + drum_keys:
                     midi_note = None
                     if channel.channel_type == project.CHANNEL_TYPE_DRUM:
@@ -351,6 +355,7 @@ class PatternEditor(object):
 
             nowtime = time.time()
             if repaint < nowtime - 0.05:
+                self._octave = key_to_midi_octave
                 self.paint()
                 repaint = nowtime
 
@@ -360,26 +365,36 @@ class PatternEditor(object):
         channels = self.pattern.channels
         current_channel = self._current_channel
         curr_time = self.player.get_time()
+        y = 0
+        pad.addstr(y, 0, 'Pattern Name: {} | Len: {} | Octave: {} | BPM: {} | {}         '.format(
+            self.pattern.name,
+            self.pattern.len,
+            self._octave,
+            self.project.bpm,
+            '(REC)' if self.rec else '(---)'
+        ))
+        y = 1
         if self.pattern.channels:
-            pad.addstr(0, 0, " " * (20 + int(curr_time)%self.pattern.len*3) + " *                     ", keys.A_BOLD)
+            pad.addstr(y, 0, " " * (20 + int(curr_time)%self.pattern.len*3) + " *                     ", keys.A_BOLD)
+        y = 2
             
         for channel in channels:
             if only_pos: break
-            y = channels.index(channel)
+            i = channels.index(channel)
             offset_len = len(self.delete_keys)
             for offset in range(0, self.pattern.len / offset_len):
-                if y == current_channel and offset == self._channel_offset:
+                if i == current_channel and offset == self._channel_offset:
                     attr = keys.A_BOLD
                 else:
                     attr = 0
-                pad.addstr(y+1, 0, "{: >20}".format(channel.name))
+                pad.addstr(y+i, 0, "{: >20}".format(channel.name))
                 for x in range(offset * offset_len, min((offset+1) * offset_len, self.pattern.len)):
                     data = '-'
                     if channel.channel_type == project.CHANNEL_TYPE_DRUM:
                         data = channel.data[x]
                     elif channel.channel_type == project.CHANNEL_TYPE_BASSLINE:
                         data = channel.beat_data[x]
-                    pad.addstr(y+1, x*3 + 20, "[{}]".format(data), attr)
+                    pad.addstr(y+i, x*3 + 20, "[{}]".format(data), attr)
         
         pad.refresh(0,0, 0,0, 30,100)
 
@@ -649,7 +664,7 @@ def main():
     pated.run()
 
     with open('state.json', 'w') as f:
-        f.write(json.dumps(proj.dump(), indent=2))
+        f.write(json.dumps(pated.project.dump(), indent=2))
 
     player.quit()
     keychars.stop()

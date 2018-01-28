@@ -107,6 +107,10 @@ class DrumChannel(Channel):
         self.data = tmp_data
 
     def note_on(self, time, note, velocity):
+        if self._midi_port is None:
+            connections.seq.note_on(self._midi_port, self.note, self.midi_channel, 127)
+        if time < 0: return
+
         nextval = {' ': '1', '1': '2', '2': '3', '3': '4', '4': ' '}
         note_to_pos = []
         for octave in xrange(6):
@@ -232,14 +236,20 @@ class MidiChannel(Channel):
         self.stop()
 
     def note_on(self, time, note, velocity):
+        if self._midi_port is not None:
+            connections.seq.note_on(self._midi_port, note, self.midi_channel, velocity)
+        if time < 0: return
+
         time_on = ntime(time) % self.len()
         self.data.append([time_on, None, note, velocity])
         self._state[note] = time_on
-        if self._midi_port is not None:
-            connections.seq.note_on(self._midi_port, note, self.midi_channel, velocity)
         self.rebuild_sequence()
     
     def note_off(self, time, note):
+        if self._midi_port is not None:
+            connections.seq.note_off(self._midi_port, note, self.midi_channel)
+        if time < 0: return
+
         time_off = ntime(time) % self.len()
         time_on = self._state[note]
         item = None
@@ -250,8 +260,6 @@ class MidiChannel(Channel):
             item[1] = time_off
 
         del self._state[note]
-        if self._midi_port is not None:
-            connections.seq.note_off(self._midi_port, note, self.midi_channel)
         self.rebuild_sequence()
 
     def quantize(self, time, value):

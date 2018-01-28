@@ -8,7 +8,7 @@ import keys
 class Screen():
     def __init__(self):
         self.frames = 60
-        size = width, height = 800, 600
+        size = width, height = 1024, 700
         self.screen = pygame.display.set_mode(size)
         self.clock = pygame.time.Clock()
         self.font = pygame.font.Font('basis33.ttf', 16)
@@ -50,7 +50,10 @@ class Screen():
             except:
                 continue
 
-            if ev.event_type != events.EVENT_KEY_DOWN:
+            if ev.event_type not in [events.EVENT_KEY_DOWN, events.EVENT_KEY_UP]:
+                return 0, ev
+
+            if ev.event_type == events.EVENT_KEY_UP:
                 continue
 
             k = ev.key_code

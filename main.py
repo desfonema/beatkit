@@ -41,10 +41,10 @@ class PlayerThread(threading.Thread):
         self.data = None
         self._run = threading.Event()
         self._run.set()
-        self._startime = 0
+        self.prev_time = 0
 
     def run(self):
-        prev_time = self.get_time()
+        self.prev_time = self.get_time()
         mute_channels = False
         while self._run.is_set():
 
@@ -58,11 +58,11 @@ class PlayerThread(threading.Thread):
             mute_channels = True
             
             curr_time = self.get_time()
-            if prev_time > curr_time:
-                prev_time = curr_time - 0.1
+            if self.prev_time > curr_time:
+                self.prev_time = curr_time - 0.1
 
-            self.data.play_range(prev_time, curr_time)
-            prev_time = curr_time
+            self.data.play_range(self.prev_time, curr_time)
+            self.prev_time = curr_time
             time.sleep(0.01)
 
     def play(self, data):
@@ -71,10 +71,14 @@ class PlayerThread(threading.Thread):
         self.data.bind()
         jack_client.transport_start()
 
-    def stop(self):
+    def pause(self):
         jack_client.transport_stop()
-        jack_client.transport_locate(0)
         self.mute()
+
+    def stop(self):
+        self.pause()
+        self.prev_time = 0
+        jack_client.transport_locate(0)
 
     def quit(self):
         self._run.clear()
@@ -398,7 +402,7 @@ class ProjectEditor(object):
         self.scr = scr
         self.player = player
         self._pattern = None
-        self._seq_pos = None
+        self._seq_pos = 0
         self._seq_edit = False
         self._debug = ''
         self._undo_buffer = [self.project.dump()]

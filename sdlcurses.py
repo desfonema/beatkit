@@ -7,7 +7,7 @@ import keys
 
 class Screen():
     def __init__(self):
-        self.frames = 60
+        self.frames = 120
         size = width, height = 1024, 700
         self.screen = pygame.display.set_mode(size)
         self.clock = pygame.time.Clock()
@@ -160,7 +160,7 @@ class PyGameThread(threading.Thread):
                     events.put(events.KeyboardDownEvent(event.key, event.unicode))
                 elif event.type == pygame.KEYUP:
                     events.put(events.KeyboardUpEvent(event.key, chr(event.key & 0xff)))
-            clock.tick(60)
+            clock.tick(120)
         
     def stop(self):
         self._run.clear()

@@ -47,20 +47,18 @@ class PlayerThread(threading.Thread):
         self.prev_time = self.get_time()
         mute_channels = False
         while self._run.is_set():
+            curr_time = self.get_time()
 
-            if not self.playing():
+            if not self.playing() or self.data is None:
                 if mute_channels:
                     self.mute()
                     mute_channels = False
                 time.sleep(0.1)
+                self.prev_time  = curr_time
                 continue
     
             mute_channels = True
             
-            curr_time = self.get_time()
-            if self.prev_time > curr_time:
-                self.prev_time = curr_time - 0.1
-
             self.data.play_range(self.prev_time, curr_time)
             self.prev_time = curr_time
             time.sleep(0.01)

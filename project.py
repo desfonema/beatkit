@@ -306,10 +306,12 @@ class MidiChannel(Channel):
                 data_repr = str(qvalue)
                 qdelta = time_on - round(time_on * qvalue) / qvalue
 
-            self.data_seq.append((time_on - qdelta, NOTE_ON, note, velocity))
+            time_on = (time_on - qdelta) % self._len
+            self.data_seq.append((time_on, NOTE_ON, note, velocity))
 
             if time_off:
-                self.data_seq.append((time_off - qdelta, NOTE_OFF, note, 0))
+                time_off = (time_off - qdelta) % self._len
+                self.data_seq.append((time_off, NOTE_OFF, note, 0))
 
             self.beat_data[itime] = data_repr
         self.data_seq.sort()

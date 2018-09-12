@@ -11,6 +11,7 @@ import keys
 import events
 import project
 import connections
+from util import set_thread_name
 
 
 def log(data):
@@ -37,6 +38,7 @@ BPM = ObjectInt(120)
 
 class PlayerThread(threading.Thread):
     def __init__(self):
+        set_thread_name("beatkit player")
         super(PlayerThread, self).__init__()
         self.data = None
         self._run = threading.Event()
@@ -353,7 +355,6 @@ class PatternEditor(object):
                 self._octave = key_to_midi_octave
                 self.paint()
                 repaint = nowtime
-
 
     def paint(self, only_pos=False):
         pad = self.pad

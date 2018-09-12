@@ -1,6 +1,7 @@
 import Queue
 import threading
 from time import sleep
+from util import set_thread_name
 
 
 EVENT_NONE = 0
@@ -59,6 +60,7 @@ class QuitEvent(Event):
 class MidiInThread(threading.Thread):
     def __init__(self, seq):
         super(MidiInThread, self).__init__()
+        set_thread_name("beatkit midi-in")
         self.seq = seq
         seq.create_input()
         self._run = threading.Event()

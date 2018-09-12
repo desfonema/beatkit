@@ -1,6 +1,7 @@
 import threading
 
 import pygame_sdl2 as pygame
+from util import set_thread_name
 import events
 import keys
 
@@ -126,6 +127,7 @@ def initscr():
 class PyGameThread(threading.Thread):
     def __init__(self):
         super(PyGameThread, self).__init__()
+        set_thread_name("beatkit kbrd")
         self._run = threading.Event()
         self._run.set()
 

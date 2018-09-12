@@ -55,7 +55,7 @@ class PlayerThread(threading.Thread):
                 if mute_channels:
                     self.mute()
                     mute_channels = False
-                time.sleep(0.1)
+                time.sleep(0.05)
                 self.prev_time  = curr_time
                 continue
     
@@ -63,7 +63,7 @@ class PlayerThread(threading.Thread):
             
             self.data.play_range(self.prev_time, curr_time)
             self.prev_time = curr_time
-            time.sleep(0.01)
+            time.sleep(0.03)
 
     def play(self, data):
         self.data = data
@@ -170,6 +170,7 @@ class PatternEditor(object):
         self.rec = True
         self.delete_keys = ['A', 'S', 'D', 'F']
         self._undo_buffer = [self.pattern.dump()]
+        self._prev_pos = None
 
     def push_undo(self):
         current_state = self.pattern.dump()
@@ -371,26 +372,36 @@ class PatternEditor(object):
         ))
         y = 1
         if self.pattern.channels:
-            pad.addstr(y, 0, " " * (20 + int(curr_time)%self.pattern.len*3) + " *                     ", keys.A_BOLD)
+            if self._prev_pos:
+                pad.addstr(y, self._prev_pos, " ", keys.A_BOLD)
+
+            pos = (21 + int(curr_time)%self.pattern.len*3)
+            pad.addstr(y, pos, "*", keys.A_BOLD)
+            self._prev_pos = pos
+
         y = 2
             
         for channel in channels:
             if only_pos: break
             i = channels.index(channel)
             offset_len = len(self.delete_keys)
-            for offset in range(0, self.pattern.len / offset_len):
-                if i == current_channel and offset == self._channel_offset:
-                    attr = keys.A_BOLD
-                else:
-                    attr = 0
-                pad.addstr(y+i, 0, "{: >20}".format(channel.name))
-                for x in range(offset * offset_len, min((offset+1) * offset_len, self.pattern.len)):
-                    data = '-'
-                    if channel.channel_type == project.CHANNEL_TYPE_DRUM:
-                        data = channel.data[x]
-                    elif channel.channel_type == project.CHANNEL_TYPE_BASSLINE:
-                        data = channel.beat_data[x]
-                    pad.addstr(y+i, x*3 + 20, "[{}]".format(data), attr)
+
+            attr = keys.A_BOLD if i == current_channel else 0
+
+            pad.addstr(y+i, 0, "{: >20}".format(channel.name), attr)
+
+            data = ['-'] * self.pattern.len
+            if channel.channel_type == project.CHANNEL_TYPE_DRUM:
+                data = channel.data
+            elif channel.channel_type == project.CHANNEL_TYPE_BASSLINE:
+                data = channel.beat_data
+
+            pad.addstr(y+i, 20, "[" + "][".join(data) + "]")
+            
+            if attr:
+                start = (self._channel_offset * offset_len) % self.pattern.len
+                end = start + offset_len
+                pad.addstr(y+i, 3*start + 20, "[" + "][".join(data[start:end]) + "]", attr)
         
         pad.refresh(0,0, 0,0, 30,100)
 

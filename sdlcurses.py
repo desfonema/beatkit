@@ -15,19 +15,24 @@ class Screen():
         self.font = pygame.font.Font('basis33.ttf', 16)
         text = self.font.render('M', False, (255,255,255), (0,0,0))
         self.ux, self.uy = text.get_size()
-
+        self._font_render_cache = {}
 
     def timeout(self, time):
         self.frames = time
 
     def addstr(self, y, x, text, attr=None):
-        #self.font.set_bold(bool(attr))
         color = (255, 255, 31) if bool(attr) else (255,255,255)
-        text = self.font.render(text, False, color, (0,0,0))
+        text_key = (text, color)
+
+        text_render = self._font_render_cache.get(text_key, None)
+        if not text_render:
+            text_render = self.font.render(text, False, color, (0,0,0))
+            self._font_render_cache[text_key] = text_render
+
         x1, y1 = self.ux*x, self.uy*y
-        w, h = text.get_size()
+        w, h = text_render.get_size()
         self.screen.fill(pygame.Color("black"), (x1, y1, w, h))
-        self.screen.blit(text, (x1 ,y1))
+        self.screen.blit(text_render, (x1 ,y1))
 
     def refresh(self, *args):
         pygame.display.flip()

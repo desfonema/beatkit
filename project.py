@@ -1,5 +1,6 @@
 import uuid
 from copy import deepcopy
+from bisect import bisect_left
 
 from audio.alsaseq import (
     MIDI_EVENT_NOTE_ON as NOTE_ON,
@@ -315,24 +316,27 @@ class MidiChannel(Channel):
 
             self.beat_data[itime] = data_repr
         self.data_seq.sort()
-            
+    
     def play_range(self, prev_time, curr_time):
         if self._midi_port is None:
             return
 
         prev_time = prev_time % self.len()
         curr_time = curr_time % self.len()
-        for time, event, note, velocity in self.data_seq:
-            if prev_time <= curr_time:
-                play_note = prev_time <= time < curr_time
-            else:
-                play_note = prev_time <= time or time < curr_time
 
-            if play_note:
-                if event == NOTE_ON:
-                    connections.seq.note_on(self._midi_port, note, self.midi_channel, velocity)
-                elif event == NOTE_OFF:
-                    connections.seq.note_off(self._midi_port, note, self.midi_channel)
+        prev_i = bisect_left(self.data_seq, (prev_time, None))
+        curr_i = bisect_left(self.data_seq, (curr_time, None))
+
+        if prev_i <= curr_i:
+            play_seq = self.data_seq[prev_i:curr_i]
+        else:
+            play_seq = self.data_seq[prev_i:] + self.data_seq[:curr_i]
+
+        for time, event, note, velocity in play_seq:
+            if event == NOTE_ON:
+                connections.seq.note_on(self._midi_port, note, self.midi_channel, velocity)
+            elif event == NOTE_OFF:
+                connections.seq.note_off(self._midi_port, note, self.midi_channel)
     
     def stop(self):
         if self._midi_port is None:

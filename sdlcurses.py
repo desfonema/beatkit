@@ -118,13 +118,21 @@ class Screen():
 
         return k, value
 
+
 def noecho():
     pass
+
 
 def cbreak():
     pass
 
-def initscr():
+
+def initscr(name=None, icon=None):
+    if icon:
+        icon = pygame.image.load(icon)
+        pygame.display.set_icon(icon)
+    if name:
+        pygame.display.set_caption(name)
     pygame.init()
     return Screen()
 
@@ -143,6 +151,14 @@ class PyGameThread(threading.Thread):
         clock = pygame.time.Clock()
         while self._run.is_set():
             for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    events.put(events.QuitEvent())
+                    continue
+
+                if event.type == pygame.ACTIVEEVENT:
+                    events.put(events.RefreshEvent())
+                    continue
+
                 if event.type not in [pygame.KEYDOWN, pygame.KEYUP]:
                     continue
                 if event.key in [pygame.K_RSHIFT, pygame.K_LSHIFT]:
@@ -168,7 +184,7 @@ class PyGameThread(threading.Thread):
                 elif event.type == pygame.KEYUP:
                     events.put(events.KeyboardUpEvent(event.key, chr(event.key & 0xff)))
             clock.tick(120)
-        
+
     def stop(self):
         self._run.clear()
 
@@ -231,8 +247,6 @@ class Menu(object):
             else:
                 self.scr.addstr(y, x+i, c, attr)
                 attr = 0
-
-
 
 
 if __name__ == "__main__":

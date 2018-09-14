@@ -480,7 +480,7 @@ class Project(object):
 
     def remove_pattern(self, pattern):
         self.patterns.remove(pattern)
-        self.patterns_seq = [p for p in self.patterns_seq if p != pattern]
+        self.patterns_seq = [p for p in self.patterns_seq if p != pattern.uid]
         self.rebuild_sequence()
         
 

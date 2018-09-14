@@ -138,6 +138,7 @@ class ChannelEditor(object):
                     channel.note_off(-1, v.note)
             elif k in [keys.KEY_ENTER, keys.KEY_ESC]:
                 break
+        scr.erase()
                 
     def refresh(self):
         scr = self.scr
@@ -221,7 +222,12 @@ class PatternEditor(object):
                 continue
 
             if ev.event_type == events.EVENT_QUIT:
+                events.put(ev)
                 break
+
+            if ev.event_type == events.EVENT_REFRESH:
+                self.paint()
+                continue
 
             self._current_channel = min(self._current_channel, len(self.pattern.channels) - 1)
             channel = self.pattern.channels[self._current_channel]
@@ -276,6 +282,7 @@ class PatternEditor(object):
                     elif command == 'r':
                         self.pattern.channels.remove(channel)
                         self._current_channel = min(self._current_channel, len(self.pattern.channels) - 1)
+                        pad.erase()
                     elif command == 'e':
                         ChannelEditor(pad, channel).run()
                     elif command == 'en':
@@ -435,6 +442,9 @@ class ProjectEditor(object):
             except:
                 continue
 
+            if ev.event_type == events.EVENT_QUIT:
+                break
+
             if ev.event_type != events.EVENT_KEY_DOWN:
                 continue
 
@@ -545,8 +555,9 @@ class ProjectEditor(object):
             else:
                 self._debug = 'DEBUG: KEY {} | CHAR "{}"'.format(k, c)
 
+            self._seq_edit = self._seq_edit and len(self.project.patterns_seq)
             self.refresh()
-                
+
     def refresh(self):
         addstr =self.scr.addstr
         self.scr.erase()
@@ -654,7 +665,7 @@ def main():
         with open('state.json') as f:
             proj.load(json.loads(f.read()))
 
-    screen = sdlcurses.initscr()
+    screen = sdlcurses.initscr('BeatKit v0.1', 'beatkit.png')
 
     # Pattern Player thread
     player = PlayerThread()

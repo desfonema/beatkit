@@ -10,6 +10,7 @@ EVENT_KEY_UP = 1
 EVENT_KEY_DOWN = 2
 EVENT_MIDI = 4
 EVENT_QUIT = 64
+EVENT_REFRESH = 128
 
 
 event_queue = Queue.Queue()
@@ -57,6 +58,8 @@ class MidiEvent(Event):
 class QuitEvent(Event):
     event_type = EVENT_QUIT
 
+class RefreshEvent(Event):
+    event_type = EVENT_REFRESH
 
 class MidiInThread(threading.Thread):
     def __init__(self, seq):

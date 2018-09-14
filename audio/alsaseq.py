@@ -8,17 +8,20 @@ MIDI_EVENT_PITCH = seq.SEQ_EVENT_PITCHBEND
 class alsaseq:
     def __init__(self, name):
         self.seq = seq.Sequencer(clientname=name)
-
-    
-    def create_input(self):
-        return self.seq.create_simple_port(
+        self.intput = self.seq.create_simple_port(
             'Midi Input', 
             seq.SEQ_PORT_TYPE_MIDI_GENERIC | seq.SEQ_PORT_TYPE_APPLICATION,
             seq.SEQ_PORT_CAP_WRITE | seq.SEQ_PORT_CAP_SUBS_WRITE,
         )
+        self.ports = {}
     
     def create_output(self, name):
-        return self.seq.create_simple_port(name, seq.SEQ_PORT_TYPE_APPLICATION, seq.SEQ_PORT_CAP_READ | seq.SEQ_PORT_CAP_SUBS_READ)
+        port_id = self.seq.create_simple_port(name, seq.SEQ_PORT_TYPE_APPLICATION, seq.SEQ_PORT_CAP_READ | seq.SEQ_PORT_CAP_SUBS_READ)
+        self.ports[name] = port_id
+        return port_id
+
+    def connect(self, port, dest_id, dest_port):
+        self.seq.connect_ports((self.seq.client_id, port), (dest_id, dest_port))
     
     def event_input(self):
         return self.seq.receive_events(timeout=250, maxevents = 10)

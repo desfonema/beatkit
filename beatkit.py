@@ -113,7 +113,7 @@ class ChannelEditor(object):
                 k, v = scr.textbox(0, 15, 30, channel.name, edit=True)
                 if k: channel.name = v
             elif self.pos == 1:
-                options = [c for c in connections.get_ports() if 'beatkit' not in c]
+                options = connections.seq.ports.keys()
                 k, v = scr.listbox(1, 15, 30, channel.midi_port, options=options, edit=True)
                 if k:
                     channel.midi_port = v

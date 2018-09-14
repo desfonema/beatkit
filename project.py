@@ -73,7 +73,7 @@ class Channel(object):
         pass
 
     def bind(self):
-        self._midi_port = connections.ports.get(self.midi_port)
+        self._midi_port = connections.seq.ports.get(self.midi_port)
 
     def stop(self):
         pass
@@ -92,7 +92,7 @@ class DrumChannel(Channel):
                  midi_port='', midi_channel=0, note=0):
         self.name = name
         self.midi_port = midi_port
-        self._midi_port = connections.ports.get(midi_port)
+        self._midi_port = connections.seq.ports.get(midi_port)
         self.midi_channel = int(midi_channel)
         self.note = note
         self.data = data
@@ -180,7 +180,7 @@ class MidiChannel(Channel):
         self.data = data
         self.qmap = qmap
         self.midi_port = midi_port
-        self._midi_port = connections.ports.get(midi_port)
+        self._midi_port = connections.seq.ports.get(midi_port)
         self.midi_channel = int(midi_channel)
         self._state = {}
         if data is not None:

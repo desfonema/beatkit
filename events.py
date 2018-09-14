@@ -2,6 +2,7 @@ import Queue
 import threading
 from time import sleep
 from util import set_thread_name
+from audio import alsaseq
 
 
 EVENT_NONE = 0
@@ -62,22 +63,21 @@ class MidiInThread(threading.Thread):
         super(MidiInThread, self).__init__()
         set_thread_name("beatkit midi-in")
         self.seq = seq
-        seq.create_input()
         self._run = threading.Event()
         self._run.set()
 
     def run(self):
         while self._run.is_set():
-            while self.seq.event_input_pending():
-                ev = self.seq.event_input()
+            for ev in self.seq.event_input():
+                if ev.type not in [alsaseq.MIDI_EVENT_NOTE_ON, alsaseq.MIDI_EVENT_NOTE_OFF]:
+                    continue
+                data = ev.get_data()
                 put(MidiEvent(
-                    ev['type'],
-                    ev['data']['note']['channel'],
-                    ev['data']['note']['note'],
-                    ev['data']['note']['velocity']
+                    ev.type,
+                    data['note.channel'],
+                    data['note.note'],
+                    data['note.velocity']
                 ))
-            sleep(0.01)
-                
         
     def stop(self):
         self._run.clear()

@@ -1,93 +1,61 @@
-import alsamidi
+from pyalsa import alsaseq as seq
 
-(
-    MIDI_EVENT_NOTE_ON, 
-    MIDI_EVENT_NOTE_OFF,
-    MIDI_EVENT_CONTROLLER,
-    MIDI_EVENT_PITCH
-) = alsamidi.seq_event_type_values()
+MIDI_EVENT_NOTE_ON = seq.SEQ_EVENT_NOTEON
+MIDI_EVENT_NOTE_OFF = seq.SEQ_EVENT_NOTEOFF
+MIDI_EVENT_CONTROLLER = seq.SEQ_EVENT_CONTROLLER
+MIDI_EVENT_PITCH = seq.SEQ_EVENT_PITCHBEND
 
 class alsaseq:
     def __init__(self, name):
-        alsamidi.seq_open(name)
+        self.seq = seq.Sequencer(clientname=name)
+
     
     def create_input(self):
-        return alsamidi.seq_create_input_port()
+        return self.seq.create_simple_port(
+            'Midi Input', 
+            seq.SEQ_PORT_TYPE_MIDI_GENERIC | seq.SEQ_PORT_TYPE_APPLICATION,
+            seq.SEQ_PORT_CAP_WRITE | seq.SEQ_PORT_CAP_SUBS_WRITE,
+        )
     
     def create_output(self, name):
-        return alsamidi.seq_create_output_port(name)
-    
-    def event_input_pending(self):
-        return alsamidi.seq_event_input_pending()
+        return self.seq.create_simple_port(name, seq.SEQ_PORT_TYPE_APPLICATION, seq.SEQ_PORT_CAP_READ | seq.SEQ_PORT_CAP_SUBS_READ)
     
     def event_input(self):
-        return alsamidi.seq_event_input()
+        return self.seq.receive_events(timeout=250, maxevents = 10)
     
-    def send_output(self, port, ev):
-        alsamidi.seq_event_output(
-            port,
-            ev['type'],
-            ev['flags'],
-            ev['tag'],
-            ev['queue'],
-            ev['time']['tick'],
-            ev['time']['time']['tv_sec'],
-            ev['time']['time']['tv_nsec'],
-            ev['source']['client'],
-            ev['source']['port'],
-            ev['dest']['client'],
-            ev['dest']['port'],
-            ev['data']['note']['channel'],
-            ev['data']['note']['note'],
-            ev['data']['note']['velocity'],
-            ev['data']['note']['off_velocity'],
-            ev['data']['note']['duration'],
-            ev['data']['control']['channel'],
-            ev['data']['control']['param'],
-            ev['data']['control']['value'])
-    
-    #Cretes an empty event to be modified
-    def empty_event(self):
-        return {'dest': {'client': 0, 'port': 0}, 'data': {'note': {'note': 0, 'velocity': 0, 'duration': 0, 'off_velocity': 0, 'channel': 0}, 'control': {'value': 0, 'param': 0, 'channel': 0}}, 'queue': 0, 'source': {'client': 0, 'port': 0}, 'tag': 0, 'flags': 0, 'time': {'tick': 0, 'time': {'tv_sec': 0, 'tv_nsec': 0}}, 'type': 0}
-
-    def note_on(self, port, note, channel, velocity):
+    def send_output(self, port, event_type, event_data):
         if not isinstance(port, int): return
-        ev = self.empty_event()
-        ev['type'] = MIDI_EVENT_NOTE_ON
-        ev['queue'] = 253
-        ev['data']['note']['note'] = note
-        ev['data']['note']['channel'] = channel
-        ev['data']['note']['velocity'] = velocity
-        ev['data']['control']['channel'] = channel
-        self.send_output(port,ev)
+
+        ev = seq.SeqEvent(type=event_type)
+        ev.source = (self.seq.client_id, port)
+        ev.set_data(event_data)
+        self.seq.output_event(ev)
+        self.seq.drain_output()
+    
+    def note_on(self, port, note, channel, velocity):
+        self.send_output(port, MIDI_EVENT_NOTE_ON, {
+            'note.channel' : channel,
+            'note.note' : note,
+            'note.velocity' : velocity,
+        })
         
     def note_off(self, port, note, channel):
-        ev = self.empty_event()
-        ev['type'] = MIDI_EVENT_NOTE_OFF
-        ev['queue'] = 253
-        ev['data']['note']['note'] = note
-        ev['data']['note']['channel'] = channel
-        ev['data']['control']['channel'] = channel
-        self.send_output(port,ev)
+        self.send_output(port, MIDI_EVENT_NOTE_OFF, {
+            'note.channel' : channel,
+            'note.note' : note,
+            'note.velocity' : 0,
+        })
         
     def set_control(self, port, value, param, channel):
-        ev = self.empty_event()
-        ev['type'] = MIDI_EVENT_CONTROLLER
-        ev['queue'] = 253
-        ev['data']['note']['note'] = 0
-        ev['data']['note']['channel'] = channel
-        ev['data']['control']['channel'] = channel
-        ev['data']['control']['value'] = value
-        ev['data']['control']['param'] = param
-        self.send_output(port,ev)
-        
+        self.send_output(port, MIDI_EVENT_CONTROLLER, {
+            'control.channel' : channel,
+            'control.value' : note,
+            'control.param' : param,
+        })
+            
     def set_pitchbend(self, port, value, channel):
-        ev = self.empty_event()
-        ev['type'] = MIDI_EVENT_PITCH
-        ev['queue'] = 253
-        ev['data']['note']['note'] = 0
-        ev['data']['note']['channel'] = channel
-        ev['data']['control']['channel'] = channel
-        ev['data']['control']['value'] = value
-        ev['data']['control']['param'] = 0
-        self.send_output(port,ev)
+        self.send_output(port, MIDI_EVENT_PITCH, {
+            'control.channel' : channel,
+            'control.value' : note,
+            'control.param' : param,
+        })

@@ -237,7 +237,7 @@ class PatternEditor(object):
                 ntime = self.player.get_time() if self.rec else -1
                 if ev.midi_event_type == alsaseq.MIDI_EVENT_NOTE_ON:
                     if ev.note not in midi_state:
-                        channel.note_on(ntime, ev.note, 127)
+                        channel.note_on(ntime, ev.note, ev.velocity)
                         midi_state.add(ev.note)
                 elif ev.midi_event_type == alsaseq.MIDI_EVENT_NOTE_OFF:
                     if ev.note in midi_state:

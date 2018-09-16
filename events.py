@@ -75,6 +75,8 @@ class MidiInThread(threading.Thread):
                 if ev.type not in [alsaseq.MIDI_EVENT_NOTE_ON, alsaseq.MIDI_EVENT_NOTE_OFF]:
                     continue
                 data = ev.get_data()
+                if not data['note.velocity']:
+                    ev.type = alsaseq.MIDI_EVENT_NOTE_OFF
                 put(MidiEvent(
                     ev.type,
                     data['note.channel'],

@@ -291,6 +291,7 @@ class MidiChannel(Channel):
             )
             for time_on, time_off, note, velocity
             in self.data
+            if time_on is not None and time_off is not None
         ]
         self.qmap = self.qmap[time:] + self.qmap[:time]
         self.rebuild_sequence()

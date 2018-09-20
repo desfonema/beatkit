@@ -47,19 +47,19 @@ class PlayerThread(threading.Thread):
 
     def run(self):
         self.prev_time = self.get_time()
-        mute_channels = False
+        mute_notes = False
         while self._run.is_set():
             curr_time = self.get_time()
 
             if not self.playing() or self.data is None:
-                if mute_channels:
+                if mute_notes:
                     self.mute()
-                    mute_channels = False
+                    mute_notes = False
                 time.sleep(0.05)
                 self.prev_time  = curr_time
                 continue
     
-            mute_channels = True
+            mute_notes = True
             
             self.data.play_range(self.prev_time, curr_time)
             self.prev_time = curr_time
@@ -96,40 +96,40 @@ class PlayerThread(threading.Thread):
         return float(jack_client.transport_frame)/jack_client.samplerate * (BPM.get()/60.)*2
 
 
-class ChannelEditor(object):
-    def __init__(self, scr, channel):
-        self.channel = channel
+class TrackEditor(object):
+    def __init__(self, scr, track):
+        self.track = track
         self.scr = scr
 
     def run(self):
         scr = self.scr
         scr.erase()
-        channel = self.channel
+        track = self.track
         self.pos = 0
-        fields = 4 if channel.channel_type == project.CHANNEL_TYPE_DRUM else 3
+        fields = 4 if track.track_type == project.TRACK_TYPE_DRUM else 3
         while True:
             self.refresh()
             if self.pos == 0:
-                k, v = scr.textbox(0, 15, 30, channel.name, edit=True)
-                if k: channel.name = v
+                k, v = scr.textbox(0, 15, 30, track.name, edit=True)
+                if k: track.name = v
             elif self.pos == 1:
                 options = connections.seq.ports.keys()
-                k, v = scr.listbox(1, 15, 30, channel.midi_port, options=options, edit=True)
+                k, v = scr.listbox(1, 15, 30, track.midi_port, options=options, edit=True)
                 if k:
-                    channel.midi_port = v
-                    channel.bind()
+                    track.midi_port = v
+                    track.bind()
             elif self.pos == 2:
-                channel_id = channel.midi_channel if channel.midi_channel < project.CHANNEL_ALL else 'Original'
+                channel_id = track.midi_channel if track.midi_channel < project.CHANNEL_ALL else 'Original'
                 options = ['Original'] + [str(p) for p in range(16)]
                 k, v = scr.listbox(2, 15, 30, channel_id, options=options, edit=True)
                 if k and v.isdigit():
-                    channel.midi_channel = int(v)
+                    track.midi_channel = int(v)
                 elif k:
-                    channel.midi_channel = project.CHANNEL_ALL
+                    track.midi_channel = project.CHANNEL_ALL
             elif self.pos == 3:
-                k, v = scr.textbox(3, 15, 30, channel.note, edit=True)
+                k, v = scr.textbox(3, 15, 30, track.note, edit=True)
                 if k and v.isdigit():
-                    channel.note = int(v)
+                    track.note = int(v)
 
             if k in [keys.KEY_TAB, keys.KEY_DOWN]:
                 self.pos = (self.pos + 1) % fields
@@ -137,24 +137,24 @@ class ChannelEditor(object):
                 self.pos = (self.pos - 1) % fields
             elif not k and v.event_type == events.EVENT_MIDI:
                 if v.midi_event_type == alsaseq.MIDI_EVENT_NOTE_ON:
-                    channel.note_on(-1, ev.channel, v.note, 127)
+                    track.note_on(-1, ev.channel, v.note, 127)
                 elif v.midi_event_type == alsaseq.MIDI_EVENT_NOTE_OFF:
-                    channel.note_off(-1, ev.channel, v.note)
+                    track.note_off(-1, ev.channel, v.note)
             elif k in [keys.KEY_ENTER, keys.KEY_ESC]:
                 break
         scr.erase()
                 
     def refresh(self):
         scr = self.scr
-        channel = self.channel
-        channel_id = channel.midi_channel if channel.midi_channel < project.CHANNEL_ALL else 'Original'
+        track = self.track
+        channel_id = track.midi_channel if track.midi_channel < project.CHANNEL_ALL else 'Original'
         items = [
-            ('Name', channel.name),
-            ('Midi Port', channel.midi_port),
+            ('Name', track.name),
+            ('Midi Port', track.midi_port),
             ('Midi Channel', channel_id),
         ]
-        if channel.channel_type == project.CHANNEL_TYPE_DRUM:
-            items.append(('Note', channel.note))
+        if track.track_type == project.TRACK_TYPE_DRUM:
+            items.append(('Note', track.note))
 
         for i, data in enumerate(items):
             label, value = data
@@ -166,8 +166,8 @@ class ChannelEditor(object):
 
 class PatternEditor(object):
     def __init__(self, project, pattern, pad, player):
-        self._current_channel = 0
-        self._channel_offset = 0
+        self._current_track = 0
+        self._track_offset = 0
         self._octave = 0
         self.project = project
         self.pattern = pattern
@@ -202,8 +202,8 @@ class PatternEditor(object):
         midi_state = set()
 
         row_keys = {keys.KEY_UP: -1, keys.KEY_DOWN: 1}
-        move_channel_keys = {keys.KEY_SR: -1, keys.KEY_SF: 1}
-        shift_channel_keys = {keys.KEY_SLEFT: 1, keys.KEY_SRIGHT: -1}
+        move_track_keys = {keys.KEY_SR: -1, keys.KEY_SF: 1}
+        shift_track_keys = {keys.KEY_SLEFT: 1, keys.KEY_SRIGHT: -1}
         offset_keys = {keys.KEY_LEFT: -1, keys.KEY_RIGHT: 1}
         octave_keys = {'-': -1, '+': 1}
 
@@ -234,8 +234,8 @@ class PatternEditor(object):
                 self.paint()
                 continue
 
-            self._current_channel = min(self._current_channel, len(self.pattern.channels) - 1)
-            channel = self.pattern.channels[self._current_channel]
+            self._current_track = min(self._current_track, len(self.pattern.tracks) - 1)
+            track = self.pattern.tracks[self._current_track]
 
             if ev.event_type == events.EVENT_MIDI:
                 # Process input values
@@ -243,11 +243,11 @@ class PatternEditor(object):
                 channel_note = (ev.channel, ev.note)
                 if ev.midi_event_type == alsaseq.MIDI_EVENT_NOTE_ON:
                     if channel_note not in midi_state:
-                        channel.note_on(ntime, ev.channel, ev.note, ev.velocity)
+                        track.note_on(ntime, ev.channel, ev.note, ev.velocity)
                         midi_state.add(channel_note)
                 elif ev.midi_event_type == alsaseq.MIDI_EVENT_NOTE_OFF:
                     if channel_note in midi_state:
-                        channel.note_off(ntime, ev.channel, ev.note)
+                        track.note_off(ntime, ev.channel, ev.note)
                         try:
                             midi_state.remove(channel_note)
                         except:
@@ -273,29 +273,29 @@ class PatternEditor(object):
 
                     if command == 'nd':
                         name = parameters or 'Drum Channel'
-                        channel = project.DrumChannel(name, [' '] * channel.len(), "", 15, 44)
-                        self.pattern.channels.append(channel)
-                        self._current_channel = len(self.pattern.channels) - 1
-                        ChannelEditor(pad, channel).run()
+                        track = project.DrumChannel(name, [' '] * track.len(), "", 15, 44)
+                        self.pattern.tracks.append(track)
+                        self._current_track = len(self.pattern.tracks) - 1
+                        TrackEditor(pad, track).run()
                     elif command == 'nm':
                         name = parameters or 'Midi Channel'
-                        channel = project.MidiChannel(name, channel.len(), [], [0] * channel.len(), "", 0)
-                        self.pattern.channels.append(channel)
-                        self._current_channel = len(self.pattern.channels) - 1
-                        ChannelEditor(pad, channel).run()
+                        track = project.MidiChannel(name, track.len(), [], [0] * track.len(), "", 0)
+                        self.pattern.tracks.append(track)
+                        self._current_track = len(self.pattern.tracks) - 1
+                        TrackEditor(pad, track).run()
                     elif command == 'd':
-                        tmp_channel = channel.__class__()
-                        tmp_channel.load(channel.dump())
-                        self.pattern.channels.append(tmp_channel)
-                        self._current_channel = len(self.pattern.channels) - 1
+                        tmp_track = track.__class__()
+                        tmp_track.load(track.dump())
+                        self.pattern.tracks.append(tmp_track)
+                        self._current_track = len(self.pattern.tracks) - 1
                     elif command == 'r':
-                        self.pattern.channels.remove(channel)
-                        self._current_channel = min(self._current_channel, len(self.pattern.channels) - 1)
+                        self.pattern.tracks.remove(track)
+                        self._current_track = min(self._current_track, len(self.pattern.tracks) - 1)
                         pad.erase()
                     elif command == 'e':
-                        ChannelEditor(pad, channel).run()
+                        TrackEditor(pad, track).run()
                     elif command == 'en':
-                        channel.name = parameters
+                        track.name = parameters
                     elif command == 'bpm':
                         set_bpm(parameters, self.project)
                     elif command == 'pl':
@@ -303,16 +303,16 @@ class PatternEditor(object):
                     
                 elif c in key_to_midi + drum_keys:
                     midi_note = None
-                    if channel.channel_type == project.CHANNEL_TYPE_DRUM:
+                    if track.track_type == project.TRACK_TYPE_DRUM:
                         if c in drum_keys:
                             pos = drum_keys.index(c)
-                            pos += self._channel_offset * len(delete_keys)
+                            pos += self._track_offset * len(delete_keys)
                             midi_note = drum_key_to_note[pos]
                     else:
                         midi_note = key_to_midi.index(c) + key_to_midi_octave * 12 + 60
                     
                     if not key_to_midi_state.get(midi_note):
-                        events.put(events.MidiEvent(alsaseq.MIDI_EVENT_NOTE_ON, channel.midi_channel, midi_note, 127))
+                        events.put(events.MidiEvent(alsaseq.MIDI_EVENT_NOTE_ON, track.midi_channel, midi_note, 127))
                         key_to_midi_state[midi_note] = True
                 elif c == " ":
                     if self.player.playing():
@@ -320,34 +320,34 @@ class PatternEditor(object):
                     else:
                         self.player.play(self.pattern)
                 elif k in row_keys:
-                    self._current_channel = (self._current_channel + row_keys[k]) % len(self.pattern.channels)
-                elif k in move_channel_keys:
-                    i =  self._current_channel
-                    j =  (i + move_channel_keys[k]) % len(self.pattern.channels)
-                    self.pattern.channels[i], self.pattern.channels[j] = self.pattern.channels[j], self.pattern.channels[i]
-                    self._current_channel = (self._current_channel + move_channel_keys[k]) % len(self.pattern.channels)
-                elif k in shift_channel_keys:
-                    channel.shift(shift_channel_keys[k])
+                    self._current_track = (self._current_track + row_keys[k]) % len(self.pattern.tracks)
+                elif k in move_track_keys:
+                    i =  self._current_track
+                    j =  (i + move_track_keys[k]) % len(self.pattern.tracks)
+                    self.pattern.tracks[i], self.pattern.tracks[j] = self.pattern.tracks[j], self.pattern.tracks[i]
+                    self._current_track = (self._current_track + move_track_keys[k]) % len(self.pattern.tracks)
+                elif k in shift_track_keys:
+                    track.shift(shift_track_keys[k])
                 elif k in offset_keys:
-                    self._channel_offset = (self._channel_offset + offset_keys[k]) % (self.pattern.len / len(delete_keys))
+                    self._track_offset = (self._track_offset + offset_keys[k]) % (self.pattern.len / len(delete_keys))
                 elif c in octave_keys:
                     key_to_midi_octave += octave_keys[c]
                 elif c in delete_keys:
-                    pos = delete_keys.index(c) + self._channel_offset * len(delete_keys)
-                    channel.clear(pos)
+                    pos = delete_keys.index(c) + self._track_offset * len(delete_keys)
+                    track.clear(pos)
                     self.push_undo()
                 elif c in quantize_keys:
-                    if True or channel.channel_type == project.CHANNEL_TYPE_DRUM:
-                        pos = self._channel_offset * len(delete_keys)
+                    if True or track.track_type == project.TRACK_TYPE_DRUM:
+                        pos = self._track_offset * len(delete_keys)
                         for i in range(len(delete_keys)):
-                            channel.quantize(pos + i, c)
+                            track.quantize(pos + i, c)
                         self.push_undo()
                 elif c == 'R':
                     self.rec = not self.rec
                 elif k == keys.KEY_BACKSPACE:
                     self.pop_undo()
                 elif k == keys.KEY_ENTER:
-                    ChannelEditor(pad, channel).run()
+                    TrackEditor(pad, track).run()
                 elif c == 'q' or k == keys.KEY_ESC:
                     break
             elif ev.event_type == events.EVENT_KEY_UP:
@@ -355,16 +355,16 @@ class PatternEditor(object):
                 c = chr(k & 0xff)
                 if c in key_to_midi + drum_keys:
                     midi_note = None
-                    if channel.channel_type == project.CHANNEL_TYPE_DRUM:
+                    if track.track_type == project.TRACK_TYPE_DRUM:
                         if c in drum_keys:
                             pos = drum_keys.index(c)
-                            pos += self._channel_offset * len(delete_keys)
+                            pos += self._track_offset * len(delete_keys)
                             midi_note = drum_key_to_note[pos]
                     else:
                         midi_note = key_to_midi.index(c) + key_to_midi_octave * 12 + 60
 
                     if key_to_midi_state.get(midi_note):
-                        events.put(events.MidiEvent(alsaseq.MIDI_EVENT_NOTE_OFF, channel.midi_channel, midi_note, 127))
+                        events.put(events.MidiEvent(alsaseq.MIDI_EVENT_NOTE_OFF, track.midi_channel, midi_note, 127))
                         key_to_midi_state[midi_note] = False
 
             nowtime = time.time()
@@ -375,8 +375,8 @@ class PatternEditor(object):
 
     def paint(self, only_pos=False):
         pad = self.pad
-        channels = self.pattern.channels
-        current_channel = self._current_channel
+        tracks = self.pattern.tracks
+        current_track = self._current_track
         curr_time = self.player.get_time()
         y = 0
         pad.addstr(y, 0, 'Pattern Name: {} | Len: {} | Octave: {} | BPM: {} | {}         '.format(
@@ -387,7 +387,7 @@ class PatternEditor(object):
             '(REC)' if self.rec else '(---)'
         ))
         y = 1
-        if self.pattern.channels:
+        if self.pattern.tracks:
             if self._prev_pos:
                 pad.addstr(y, self._prev_pos, " ", keys.A_BOLD)
 
@@ -397,25 +397,25 @@ class PatternEditor(object):
 
         y = 2
             
-        for channel in channels:
+        for track in tracks:
             if only_pos: break
-            i = channels.index(channel)
+            i = tracks.index(track)
             offset_len = len(self.delete_keys)
 
-            attr = keys.A_BOLD if i == current_channel else 0
+            attr = keys.A_BOLD if i == current_track else 0
 
-            pad.addstr(y+i, 0, "{: >20}".format(channel.name), attr)
+            pad.addstr(y+i, 0, "{: >20}".format(track.name), attr)
 
             data = ['-'] * self.pattern.len
-            if channel.channel_type == project.CHANNEL_TYPE_DRUM:
-                data = channel.data
-            elif channel.channel_type == project.CHANNEL_TYPE_BASSLINE:
-                data = channel.beat_data
+            if track.track_type == project.TRACK_TYPE_DRUM:
+                data = track.data
+            elif track.track_type == project.TRACK_TYPE_BASSLINE:
+                data = track.beat_data
 
             pad.addstr(y+i, 20, "[" + "][".join(data) + "]")
             
             if attr:
-                start = (self._channel_offset * offset_len) % self.pattern.len
+                start = (self._track_offset * offset_len) % self.pattern.len
                 end = start + offset_len
                 pad.addstr(y+i, 3*start + 20, "[" + "][".join(data[start:end]) + "]", attr)
         

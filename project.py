@@ -9,9 +9,9 @@ from audio.alsaseq import (
 
 import connections
 
-CHANNEL_TYPE_DUMMY = 0
-CHANNEL_TYPE_DRUM = 1
-CHANNEL_TYPE_BASSLINE = 2
+TRACK_TYPE_DUMMY = 0
+TRACK_TYPE_DRUM = 1
+TRACK_TYPE_BASSLINE = 2
 
 # There are at most 16 channels for MIDI, so 256 shuold be safe to indicate we
 # want to pass along the original MIDI channel.
@@ -41,11 +41,11 @@ def ntime(time):
     return int(time * 1000000) / 1000000.
 
 
-# Dummy channel definition to inherit from
-class Channel(object):
-    # Channel type. Each class has to have it's own
-    channel_type = CHANNEL_TYPE_DUMMY
-    # Channel name
+# Dummy track definition to inherit from
+class Track(object):
+    # Track type. Each class has to have it's own
+    track_type = TRACK_TYPE_DUMMY
+    # Track name
     name = ''
     midi_port = 'Undefined'
 
@@ -89,8 +89,8 @@ class Channel(object):
         pass
 
 
-class DrumChannel(Channel):
-    channel_type = CHANNEL_TYPE_DRUM
+class DrumTrack(Track):
+    track_type = TRACK_TYPE_DRUM
 
     def __init__(self, name='Unnamed', data=None,
                  midi_port='', midi_channel=0, note=0):
@@ -140,7 +140,7 @@ class DrumChannel(Channel):
 
     def dump(self):
         return deepcopy({
-            "channel_type": self.channel_type,
+            "track_type": self.track_type,
             "name": self.name,
             "midi_port": self.midi_port,
             "midi_channel": self.midi_channel,
@@ -156,7 +156,7 @@ class DrumChannel(Channel):
         self.data = data['data']
 
     def play_range(self, prev_time, curr_time):
-        # Check the data for channel y and see if there is an event between
+        # Check the data for track y and see if there is an event between
         # prev_time and curr_time
         if self._midi_port is None:
             return
@@ -174,8 +174,8 @@ class DrumChannel(Channel):
                 connections.seq.note_on(self._midi_port, self.note, self.midi_channel, 127)
 
 
-class MidiChannel(Channel):
-    channel_type = CHANNEL_TYPE_BASSLINE
+class MidiTrack(Track):
+    track_type = TRACK_TYPE_BASSLINE
 
     def __init__(self, name='Unnamed', lenght=0, data=None, qmap=None, 
                  midi_port='', midi_channel=0):
@@ -221,7 +221,7 @@ class MidiChannel(Channel):
 
     def dump(self):
         return deepcopy({
-            "channel_type": self.channel_type,
+            "track_type": self.track_type,
             'name': self.name,
             'len': self.len(),
             'midi_port': self.midi_port,
@@ -237,7 +237,7 @@ class MidiChannel(Channel):
         self.midi_port = data.get('midi_port', 'Undefined')
         self.data = []
         for item in data['data']:
-            # Add channel to old tracks
+            # Add track to old tracks
             if len(item) == 4:
                 time_on, time_off, note, velocity = item
                 item = (time_on, time_off, 0, note, velocity)
@@ -250,7 +250,7 @@ class MidiChannel(Channel):
 
     def note_on(self, time, channel, note, velocity):
         if self._midi_port is not None:
-            tmp_channel = channel & 256 or self.midi_channel
+            tmp_channel = channel & 255 or self.midi_channel
             connections.seq.note_on(self._midi_port, note, tmp_channel, velocity)
         if time < 0: return
 
@@ -261,7 +261,7 @@ class MidiChannel(Channel):
     
     def note_off(self, time, channel, note):
         if self._midi_port is not None:
-            tmp_channel = channel & 256 or self.midi_channel
+            tmp_channel = channel & 255 or self.midi_channel
             connections.seq.note_off(self._midi_port, note, tmp_channel)
         if time < 0: return
 
@@ -290,7 +290,7 @@ class MidiChannel(Channel):
             time_on, time_off, channel, note, velocity = item
             if time <= time_on < time + 1:
                 mark_deletion.append(item)
-                channel = channel & 0xff or self.midi_channel
+                channel = channel & 255 or self.midi_channel
                 connections.seq.note_off(self._midi_port, note, channel)
 
         for del_item in mark_deletion:
@@ -328,7 +328,7 @@ class MidiChannel(Channel):
                 qdelta = time_on - round(time_on * qvalue) / qvalue
 
             time_on = (time_on - qdelta) % self._len
-            channel = channel & 256 or self.midi_channel
+            channel = channel & 255 or self.midi_channel
             self.data_seq.append((time_on, NOTE_ON, channel, note, velocity))
 
             if time_off:
@@ -369,56 +369,56 @@ class MidiChannel(Channel):
 
 
 class Pattern(object):
-    def __init__(self, name=None, channels=None, pattern_len=None, uid=None):
+    def __init__(self, name=None, tracks=None, pattern_len=None, uid=None):
         self.name = name
-        self.channels = channels
+        self.tracks = tracks
         self.len = pattern_len
         self.uid = gen_uid() if uid is None else uid
 
     def resize(self, lenght):
-        for channel in self.channels:
-            channel.stop()
-            channel.resize(lenght)
+        for track in self.tracks:
+            track.stop()
+            track.resize(lenght)
         self.len = lenght
 
     def bind(self):
-        for channel in self.channels:
-            channel.bind()
+        for track in self.tracks:
+            track.bind()
 
     def play_range(self, prev_time, curr_time):
-        for channel in self.channels:
-            channel.play_range(prev_time, curr_time)
+        for track in self.tracks:
+            track.play_range(prev_time, curr_time)
 
     def mute(self):
-        for channel in self.channels:
-            channel.stop()
+        for track in self.tracks:
+            track.stop()
 
     def dump(self):
         return deepcopy({
             'uid': self.uid,
             'name': self.name,
             'len': self.len,
-            'channels': [c.dump() for c in self.channels],
+            'tracks': [c.dump() for c in self.tracks],
         })
 
     def load(self, data):
         self.uid = data.get('uid', gen_uid())
         self.name = data['name']
         self.len = data['len']
-        self.channels = []
-        for channel in data['channels']:
-            if channel['channel_type'] == CHANNEL_TYPE_DRUM:
-                tmp_channel = DrumChannel(
-                    channel['name'],
-                    channel['data'],
-                    channel.get('midi_port', 'Undefined'),
-                    channel.get('midi_channel', 0),
-                    channel['note'],
+        self.tracks = []
+        for track in data['tracks']:
+            if track['track_type'] == TRACK_TYPE_DRUM:
+                tmp_track = DrumTrack(
+                    track['name'],
+                    track['data'],
+                    track.get('midi_port', 'Undefined'),
+                    track.get('midi_channel', 0),
+                    track['note'],
                 )
             else:
-                tmp_channel = MidiChannel()
-                tmp_channel.load(channel)
-            self.channels.append(tmp_channel)
+                tmp_track = MidiTrack()
+                tmp_track.load(track)
+            self.tracks.append(tmp_track)
 
 
 class Project(object):
@@ -480,12 +480,12 @@ class Project(object):
                 prev_pattern = pattern
 
             if prev_pattern != pattern:
-                for channel in prev_pattern.channels:
-                    channel.stop()
+                for track in prev_pattern.tracks:
+                    track.stop()
                 prev_pattern = pattern
 
-            for channel in pattern.channels:
-                channel.play_range(
+            for track in pattern.tracks:
+                track.play_range(
                     play_start - pattern_start, 
                     play_end - pattern_start
                 )
@@ -502,14 +502,14 @@ class Project(object):
 
 
 def create_empty_pattern():
-    channels = [
-        DrumChannel('Hi Hat', [' '] * 16, "", 15, 44),
-        DrumChannel('Snare', [' '] * 16, "", 15, 38),
-        DrumChannel('Drum', [' '] * 16, "", 15, 37),
-        MidiChannel('Bass', 16, [], [0] * 16, "", 0),
-        MidiChannel('Melody', 16, [], [0] * 16, "", 1),
+    tracks = [
+        DrumTrack('Hi Hat', [' '] * 16, "", 15, 44),
+        DrumTrack('Snare', [' '] * 16, "", 15, 38),
+        DrumTrack('Drum', [' '] * 16, "", 15, 37),
+        MidiTrack('Bass', 16, [], [0] * 16, "", 0),
+        MidiTrack('Melody', 16, [], [0] * 16, "", 1),
     ]
-    return Pattern('Untitled', channels, 16)
+    return Pattern('Untitled', tracks, 16)
 
 
 def create_empty_project():

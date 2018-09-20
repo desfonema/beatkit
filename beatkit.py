@@ -63,7 +63,7 @@ class PlayerThread(threading.Thread):
             
             self.data.play_range(self.prev_time, curr_time)
             self.prev_time = curr_time
-            time.sleep(0.03)
+            time.sleep(0.01)
 
     def play(self, data):
         self.data = data
@@ -119,9 +119,13 @@ class ChannelEditor(object):
                     channel.midi_port = v
                     channel.bind()
             elif self.pos == 2:
-                k, v = scr.textbox(2, 15, 30, channel.midi_channel, edit=True)
+                channel_id = channel.midi_channel if channel.midi_channel < project.CHANNEL_ALL else 'Original'
+                options = ['Original'] + [str(p) for p in range(16)]
+                k, v = scr.listbox(2, 15, 30, channel_id, options=options, edit=True)
                 if k and v.isdigit():
                     channel.midi_channel = int(v)
+                elif k:
+                    channel.midi_channel = project.CHANNEL_ALL
             elif self.pos == 3:
                 k, v = scr.textbox(3, 15, 30, channel.note, edit=True)
                 if k and v.isdigit():
@@ -133,9 +137,9 @@ class ChannelEditor(object):
                 self.pos = (self.pos - 1) % fields
             elif not k and v.event_type == events.EVENT_MIDI:
                 if v.midi_event_type == alsaseq.MIDI_EVENT_NOTE_ON:
-                    channel.note_on(-1, v.note, 127)
+                    channel.note_on(-1, ev.channel, v.note, 127)
                 elif v.midi_event_type == alsaseq.MIDI_EVENT_NOTE_OFF:
-                    channel.note_off(-1, v.note)
+                    channel.note_off(-1, ev.channel, v.note)
             elif k in [keys.KEY_ENTER, keys.KEY_ESC]:
                 break
         scr.erase()
@@ -143,10 +147,11 @@ class ChannelEditor(object):
     def refresh(self):
         scr = self.scr
         channel = self.channel
+        channel_id = channel.midi_channel if channel.midi_channel < project.CHANNEL_ALL else 'Original'
         items = [
             ('Name', channel.name),
             ('Midi Port', channel.midi_port),
-            ('Midi Channel', channel.midi_channel),
+            ('Midi Channel', channel_id),
         ]
         if channel.channel_type == project.CHANNEL_TYPE_DRUM:
             items.append(('Note', channel.note))
@@ -235,14 +240,18 @@ class PatternEditor(object):
             if ev.event_type == events.EVENT_MIDI:
                 # Process input values
                 ntime = self.player.get_time() if self.rec else -1
+                channel_note = (ev.channel, ev.note)
                 if ev.midi_event_type == alsaseq.MIDI_EVENT_NOTE_ON:
-                    if ev.note not in midi_state:
-                        channel.note_on(ntime, ev.note, ev.velocity)
-                        midi_state.add(ev.note)
+                    if channel_note not in midi_state:
+                        channel.note_on(ntime, ev.channel, ev.note, ev.velocity)
+                        midi_state.add(channel_note)
                 elif ev.midi_event_type == alsaseq.MIDI_EVENT_NOTE_OFF:
-                    if ev.note in midi_state:
-                        channel.note_off(ntime, ev.note)
-                        midi_state.remove(ev.note)
+                    if channel_note in midi_state:
+                        channel.note_off(ntime, ev.channel, ev.note)
+                        try:
+                            midi_state.remove(channel_note)
+                        except:
+                            pass
 
                     if not midi_state:
                         self.push_undo()
@@ -303,7 +312,7 @@ class PatternEditor(object):
                         midi_note = key_to_midi.index(c) + key_to_midi_octave * 12 + 60
                     
                     if not key_to_midi_state.get(midi_note):
-                        events.put(events.MidiEvent(alsaseq.MIDI_EVENT_NOTE_ON, 0, midi_note, 127))
+                        events.put(events.MidiEvent(alsaseq.MIDI_EVENT_NOTE_ON, channel.midi_channel, midi_note, 127))
                         key_to_midi_state[midi_note] = True
                 elif c == " ":
                     if self.player.playing():
@@ -355,7 +364,7 @@ class PatternEditor(object):
                         midi_note = key_to_midi.index(c) + key_to_midi_octave * 12 + 60
 
                     if key_to_midi_state.get(midi_note):
-                        events.put(events.MidiEvent(alsaseq.MIDI_EVENT_NOTE_OFF, 0, midi_note, 127))
+                        events.put(events.MidiEvent(alsaseq.MIDI_EVENT_NOTE_OFF, channel.midi_channel, midi_note, 127))
                         key_to_midi_state[midi_note] = False
 
             nowtime = time.time()

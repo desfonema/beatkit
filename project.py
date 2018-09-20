@@ -13,6 +13,10 @@ CHANNEL_TYPE_DUMMY = 0
 CHANNEL_TYPE_DRUM = 1
 CHANNEL_TYPE_BASSLINE = 2
 
+# There are at most 16 channels for MIDI, so 256 shuold be safe to indicate we
+# want to pass along the original MIDI channel.
+CHANNEL_ALL = 256
+
 
 times = {
     ' ': [],
@@ -51,10 +55,10 @@ class Channel(object):
     def resize(self, lenght):
         pass
 
-    def note_on(self, time, note, velocity):
+    def note_on(self, time, channel, note, velocity):
         pass
 
-    def note_off(self, time, note):
+    def note_off(self, time, channel, note):
         pass
 
     def quantize(self, time, value):
@@ -107,7 +111,7 @@ class DrumChannel(Channel):
             tmp_data[i] = self.data[i % old_len]
         self.data = tmp_data
 
-    def note_on(self, time, note, velocity):
+    def note_on(self, time, channel, note, velocity):
         if self._midi_port is None:
             connections.seq.note_on(self._midi_port, self.note, self.midi_channel, 127)
         if time < 0: return
@@ -120,7 +124,7 @@ class DrumChannel(Channel):
             time = note_to_pos.index(note)
             self.data[time] = nextval[self.data[time]]
     
-    def note_off(self, time, note):
+    def note_off(self, time, channel, note):
         pass
 
     def quantize(self, time, value):
@@ -202,11 +206,11 @@ class MidiChannel(Channel):
             notes_added = False
             time_base = old_len * i
             for item in self.data:
-                time_on, time_off, note, velocity = item
+                time_on, time_off, channel, note, velocity = item
                 time_on = time_base + time_on
                 time_off = (time_base + time_off) % lenght
                 if time_on < lenght:
-                    tmp_data.append((time_on, time_off, note, velocity))
+                    tmp_data.append((time_on, time_off, channel, note, velocity))
                     notes_added = True
             i += 1
     
@@ -229,33 +233,46 @@ class MidiChannel(Channel):
     def load(self, data):
         self.name = data['name']
         self._len = data['len']
-        self.midi_channel = int(data['midi_channel'])
-        self.midi_port = data['midi_port']
-        self.data = data['data']
+        self.midi_channel = int(data.get('midi_channel', 0))
+        self.midi_port = data.get('midi_port', 'Undefined')
+        self.data = []
+        for item in data['data']:
+            # Add channel to old tracks
+            if len(item) == 4:
+                time_on, time_off, note, velocity = item
+                item = (time_on, time_off, 0, note, velocity)
+                
+            self.data.append(item)
+                
         self.qmap = data['qmap']
         self.rebuild_sequence()
         self.stop()
 
-    def note_on(self, time, note, velocity):
+    def note_on(self, time, channel, note, velocity):
         if self._midi_port is not None:
-            connections.seq.note_on(self._midi_port, note, self.midi_channel, velocity)
+            tmp_channel = channel & 256 or self.midi_channel
+            connections.seq.note_on(self._midi_port, note, tmp_channel, velocity)
         if time < 0: return
 
         time_on = ntime(time) % self.len()
-        self.data.append([time_on, None, note, velocity])
+        self.data.append([time_on, None, channel, note, velocity])
         self._state[note] = time_on
         self.rebuild_sequence()
     
-    def note_off(self, time, note):
+    def note_off(self, time, channel, note):
         if self._midi_port is not None:
-            connections.seq.note_off(self._midi_port, note, self.midi_channel)
+            tmp_channel = channel & 256 or self.midi_channel
+            connections.seq.note_off(self._midi_port, note, tmp_channel)
         if time < 0: return
+
+        if note not in self._state:
+            return
 
         time_off = ntime(time) % self.len()
         time_on = self._state[note]
         item = None
         for item in self.data:
-            if time_on == item[0] and note == item[2]:
+            if time_on == item[0] and note == item[3] and channel == item[2]:
                 break
         if item:
             item[1] = time_off
@@ -270,10 +287,11 @@ class MidiChannel(Channel):
     def clear(self, time):
         mark_deletion = []
         for item in self.data:
-            time_on, time_off, note, velocity = item
+            time_on, time_off, channel, note, velocity = item
             if time <= time_on < time + 1:
                 mark_deletion.append(item)
-                connections.seq.note_off(self._midi_port, note, self.midi_channel)
+                channel = channel & 0xff or self.midi_channel
+                connections.seq.note_off(self._midi_port, note, channel)
 
         for del_item in mark_deletion:
             self.data.remove(del_item)
@@ -286,10 +304,11 @@ class MidiChannel(Channel):
             (
                 (time_on-time) % clen,
                 (time_off-time) % clen,
+                channel,
                 note,
                 velocity
             )
-            for time_on, time_off, note, velocity
+            for time_on, time_off, channel, note, velocity
             in self.data
             if time_on is not None and time_off is not None
         ]
@@ -299,7 +318,7 @@ class MidiChannel(Channel):
     def rebuild_sequence(self):
         self.data_seq = []
         self.beat_data = [' '] * self._len
-        for time_on, time_off, note, velocity in self.data:
+        for time_on, time_off, channel, note, velocity in self.data:
             itime = int(time_on)
             data_repr = '*'
             qvalue = self.qmap[itime]
@@ -309,11 +328,12 @@ class MidiChannel(Channel):
                 qdelta = time_on - round(time_on * qvalue) / qvalue
 
             time_on = (time_on - qdelta) % self._len
-            self.data_seq.append((time_on, NOTE_ON, note, velocity))
+            channel = channel & 256 or self.midi_channel
+            self.data_seq.append((time_on, NOTE_ON, channel, note, velocity))
 
             if time_off:
                 time_off = (time_off - qdelta) % self._len
-                self.data_seq.append((time_off, NOTE_OFF, note, 0))
+                self.data_seq.append((time_off, NOTE_OFF, channel, note, 0))
 
             self.beat_data[itime] = data_repr
         self.data_seq.sort()
@@ -333,18 +353,19 @@ class MidiChannel(Channel):
         else:
             play_seq = self.data_seq[prev_i:] + self.data_seq[:curr_i]
 
-        for time, event, note, velocity in play_seq:
+        for time, event, channel, note, velocity in play_seq:
             if event == NOTE_ON:
-                connections.seq.note_on(self._midi_port, note, self.midi_channel, velocity)
+                connections.seq.note_on(self._midi_port, note, channel, velocity)
             elif event == NOTE_OFF:
-                connections.seq.note_off(self._midi_port, note, self.midi_channel)
+                connections.seq.note_off(self._midi_port, note, channel)
     
     def stop(self):
         if self._midi_port is None:
             return
 
-        for time, event, note, velocity in self.data_seq:
-            connections.seq.note_off(self._midi_port, note, self.midi_channel)
+        for time, event, channel, note, velocity in self.data_seq:
+            channel = channel & 255 or self.midi_channel
+            connections.seq.note_off(self._midi_port, note, channel)
 
 
 class Pattern(object):
@@ -395,14 +416,8 @@ class Pattern(object):
                     channel['note'],
                 )
             else:
-                tmp_channel = MidiChannel(
-                    channel['name'],
-                    channel['len'],
-                    channel['data'],
-                    channel['qmap'],
-                    channel.get('midi_port', 'Undefined'),
-                    channel.get('midi_channel', 0),
-                )
+                tmp_channel = MidiChannel()
+                tmp_channel.load(channel)
             self.channels.append(tmp_channel)
 
 

@@ -185,9 +185,21 @@ class MidiTrack(Track):
         self.qmap = qmap
         self.midi_port = midi_port
         self._midi_port = connections.seq.ports.get(midi_port)
-        self.midi_channel = int(midi_channel)
+        self._midi_channel = int(midi_channel)
         self._state = {}
         if data is not None:
+            self.rebuild_sequence()
+
+    @property
+    def midi_channel(self):
+        return self._midi_channel
+
+    @midi_channel.setter
+    def midi_channel(self, value):
+        channel = int(value)
+        if channel != self._midi_channel:
+            self.stop()
+            self._midi_channel = channel
             self.rebuild_sequence()
 
     def len(self):
@@ -318,6 +330,8 @@ class MidiTrack(Track):
     def rebuild_sequence(self):
         self.data_seq = []
         self.beat_data = [' '] * self._len
+        if not self.data:
+            return
         for time_on, time_off, channel, note, velocity in self.data:
             itime = int(time_on)
             data_repr = '*'

@@ -262,7 +262,7 @@ class MidiTrack(Track):
 
     def note_on(self, time, channel, note, velocity):
         if self._midi_port is not None:
-            tmp_channel = channel & 255 or self.midi_channel
+            tmp_channel = channel if self.midi_channel == CHANNEL_ALL else self.midi_channel
             connections.seq.note_on(self._midi_port, note, tmp_channel, velocity)
         if time < 0: return
 
@@ -273,7 +273,7 @@ class MidiTrack(Track):
     
     def note_off(self, time, channel, note):
         if self._midi_port is not None:
-            tmp_channel = channel & 255 or self.midi_channel
+            tmp_channel = channel if self.midi_channel == CHANNEL_ALL else self.midi_channel
             connections.seq.note_off(self._midi_port, note, tmp_channel)
         if time < 0: return
 
@@ -342,7 +342,7 @@ class MidiTrack(Track):
                 qdelta = time_on - round(time_on * qvalue) / qvalue
 
             time_on = (time_on - qdelta) % self._len
-            channel = channel & 255 or self.midi_channel
+            channel = channel if self.midi_channel == CHANNEL_ALL else self.midi_channel
             self.data_seq.append((time_on, NOTE_ON, channel, note, velocity))
 
             if time_off:
@@ -378,7 +378,6 @@ class MidiTrack(Track):
             return
 
         for time, event, channel, note, velocity in self.data_seq:
-            channel = channel & 255 or self.midi_channel
             connections.seq.note_off(self._midi_port, note, channel)
 
 

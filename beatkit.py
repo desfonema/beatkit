@@ -3,6 +3,7 @@ import threading
 import time
 import json
 from copy import deepcopy
+import traceback
 import jack
 
 from audio import alsaseq
@@ -137,9 +138,9 @@ class TrackEditor(object):
                 self.pos = (self.pos - 1) % fields
             elif not k and v.event_type == events.EVENT_MIDI:
                 if v.midi_event_type == alsaseq.MIDI_EVENT_NOTE_ON:
-                    track.note_on(-1, ev.channel, v.note, 127)
+                    track.note_on(-1, v.channel, v.note, 127)
                 elif v.midi_event_type == alsaseq.MIDI_EVENT_NOTE_OFF:
-                    track.note_off(-1, ev.channel, v.note)
+                    track.note_off(-1, v.channel, v.note)
             elif k in [keys.KEY_ENTER, keys.KEY_ESC]:
                 break
         scr.erase()
@@ -273,13 +274,13 @@ class PatternEditor(object):
 
                     if command == 'nd':
                         name = parameters or 'Drum Channel'
-                        track = project.DrumChannel(name, [' '] * track.len(), "", 15, 44)
+                        track = project.DrumTrack(name, [' '] * track.len(), "", 15, 44)
                         self.pattern.tracks.append(track)
                         self._current_track = len(self.pattern.tracks) - 1
                         TrackEditor(pad, track).run()
                     elif command == 'nm':
                         name = parameters or 'Midi Channel'
-                        track = project.MidiChannel(name, track.len(), [], [0] * track.len(), "", 0)
+                        track = project.MidiTrack(name, track.len(), [], [0] * track.len(), "", 0)
                         self.pattern.tracks.append(track)
                         self._current_track = len(self.pattern.tracks) - 1
                         TrackEditor(pad, track).run()
@@ -688,7 +689,11 @@ def main():
     midi_input.start()
 
     pated = ProjectEditor(proj, screen, player)
-    pated.run()
+
+    try:
+        pated.run()
+    except Exception:
+        print traceback.format_exc()
 
     with open('state.json', 'w') as f:
         f.write(json.dumps(pated.project.dump(), indent=2))

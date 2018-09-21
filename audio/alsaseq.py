@@ -51,14 +51,13 @@ class alsaseq:
         
     def set_control(self, port, value, param, channel):
         self.send_output(port, MIDI_EVENT_CONTROLLER, {
-            'control.channel' : channel,
-            'control.value' : note,
+            'control.value' : value,
             'control.param' : param,
+            'control.channel' : channel,
         })
             
     def set_pitchbend(self, port, value, channel):
         self.send_output(port, MIDI_EVENT_PITCH, {
+            'control.value' : value,
             'control.channel' : channel,
-            'control.value' : note,
-            'control.param' : param,
         })

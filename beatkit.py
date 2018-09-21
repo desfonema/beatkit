@@ -136,7 +136,7 @@ class TrackEditor(object):
                 self.pos = (self.pos + 1) % fields
             elif k in [keys.KEY_STAB, keys.KEY_UP]:
                 self.pos = (self.pos - 1) % fields
-            elif not k and v.event_type == events.EVENT_MIDI:
+            elif not k and v.event_type == events.EVENT_MIDI_NOTE:
                 if v.midi_event_type == alsaseq.MIDI_EVENT_NOTE_ON:
                     track.note_on(-1, v.channel, v.note, 127)
                 elif v.midi_event_type == alsaseq.MIDI_EVENT_NOTE_OFF:
@@ -238,7 +238,7 @@ class PatternEditor(object):
             self._current_track = min(self._current_track, len(self.pattern.tracks) - 1)
             track = self.pattern.tracks[self._current_track]
 
-            if ev.event_type == events.EVENT_MIDI:
+            if ev.event_type == events.EVENT_MIDI_NOTE:
                 # Process input values
                 ntime = self.player.get_time() if self.rec else -1
                 channel_note = (ev.channel, ev.note)
@@ -256,6 +256,10 @@ class PatternEditor(object):
 
                     if not midi_state:
                         self.push_undo()
+            elif ev.event_type == events.EVENT_MIDI_CONTROLLER:
+                connections.seq.set_control(track._midi_port, ev.value, ev.param, ev.channel)
+            elif ev.event_type == events.EVENT_MIDI_PITCHBEND:
+                connections.seq.set_pitchbend(track._midi_port, ev.value, ev.channel)
 
             elif ev.event_type == events.EVENT_KEY_DOWN:
                 k = ev.key_code
@@ -313,7 +317,7 @@ class PatternEditor(object):
                         midi_note = key_to_midi.index(c) + key_to_midi_octave * 12 + 60
                     
                     if not key_to_midi_state.get(midi_note):
-                        events.put(events.MidiEvent(alsaseq.MIDI_EVENT_NOTE_ON, track.midi_channel, midi_note, 127))
+                        events.put(events.MidiNoteEvent(alsaseq.MIDI_EVENT_NOTE_ON, track.midi_channel, midi_note, 127))
                         key_to_midi_state[midi_note] = True
                 elif c == " ":
                     if self.player.playing():
@@ -365,7 +369,7 @@ class PatternEditor(object):
                         midi_note = key_to_midi.index(c) + key_to_midi_octave * 12 + 60
 
                     if key_to_midi_state.get(midi_note):
-                        events.put(events.MidiEvent(alsaseq.MIDI_EVENT_NOTE_OFF, track.midi_channel, midi_note, 127))
+                        events.put(events.MidiNoteEvent(alsaseq.MIDI_EVENT_NOTE_OFF, track.midi_channel, midi_note, 127))
                         key_to_midi_state[midi_note] = False
 
             nowtime = time.time()

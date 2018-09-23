@@ -1,19 +1,16 @@
-from os import popen
-import re
+from sequencer_interface import SequencerInterface
+from sequencer_interface import (
+    SEQ_PORT_CAP_WRITE,
+    SEQ_PORT_CAP_SUBS_WRITE,
+)
 
-from audio.alsaseq import alsaseq
-from pyalsa import alsaseq as aseq
 
+seq = SequencerInterface('beatkit')
 
-seq = alsaseq('beatkit')
-
-def get_ports(direction='o'):
+def get_ports():
     #Get MIDI Input ports LIST
     ports = {}
-    if direction == 'o':
-        required_cap = aseq.SEQ_PORT_CAP_WRITE | aseq.SEQ_PORT_CAP_SUBS_WRITE
-    else:
-        required_cap = aseq.SEQ_PORT_CAP_READ | aseq.SEQ_PORT_CAP_SUBS_READ
+    required_cap = SEQ_PORT_CAP_WRITE | SEQ_PORT_CAP_SUBS_WRITE
 
     for client_name, client_id, client_ports in seq.seq.connection_list():
         for port_name, port_id, properties in client_ports:
@@ -29,7 +26,7 @@ def get_ports(direction='o'):
 
 
 def connect():
-    oports = get_ports('o')
+    oports = get_ports()
 
     for port_name, data in oports.iteritems():
         dest_id, dest_port = data

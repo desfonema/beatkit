@@ -2,8 +2,13 @@ import Queue
 import threading
 from time import sleep
 from util import set_thread_name
-from audio import alsaseq
 
+from sequencer_interface import (
+    MIDI_EVENT_CONTROLLER,
+    MIDI_EVENT_PITCH,
+    MIDI_EVENT_NOTE_ON,
+    MIDI_EVENT_NOTE_OFF,
+)
 
 EVENT_NONE = 0
 EVENT_KEY_UP = 1
@@ -61,7 +66,7 @@ class MidiControllerEvent(Event):
     event_type = EVENT_MIDI_CONTROLLER
     
     def __init__(self, channel, param, value):
-        self.midi_event_type = alsaseq.MIDI_EVENT_CONTROLLER
+        self.midi_event_type = MIDI_EVENT_CONTROLLER
         self.channel = channel
         self.param = param
         self.value = value
@@ -71,7 +76,7 @@ class MidiPitchbendEvent(Event):
     event_type = EVENT_MIDI_PITCHBEND
     
     def __init__(self, channel, value):
-        self.midi_event_type = alsaseq.MIDI_EVENT_PITCH
+        self.midi_event_type = MIDI_EVENT_PITCH
         self.channel = channel
         self.value = value
 
@@ -94,40 +99,40 @@ class MidiInThread(threading.Thread):
 
     def run(self):
         accepted_events = [
-            alsaseq.MIDI_EVENT_NOTE_ON,
-            alsaseq.MIDI_EVENT_NOTE_OFF,
-            alsaseq.MIDI_EVENT_CONTROLLER,
-            alsaseq.MIDI_EVENT_PITCH,
+            MIDI_EVENT_NOTE_ON,
+            MIDI_EVENT_NOTE_OFF,
+            MIDI_EVENT_CONTROLLER,
+            MIDI_EVENT_PITCH,
         ]
 
         while self._run.is_set():
             for ev in self.seq.event_input():
                 data = ev.get_data()
 
-                if ev.type == alsaseq.MIDI_EVENT_NOTE_ON:
+                if ev.type == MIDI_EVENT_NOTE_ON:
                     # Deal with Keystation 61es "Note off"
                     if not data['note.velocity']:
-                        ev.type = alsaseq.MIDI_EVENT_NOTE_OFF
+                        ev.type = MIDI_EVENT_NOTE_OFF
                     event = MidiNoteEvent(
                         ev.type,
                         data['note.channel'],
                         data['note.note'],
                         data['note.velocity']
                     )
-                elif ev.type == alsaseq.MIDI_EVENT_NOTE_OFF:
+                elif ev.type == MIDI_EVENT_NOTE_OFF:
                     event = MidiNoteEvent(
                         ev.type,
                         data['note.channel'],
                         data['note.note'],
                         data['note.velocity']
                     )
-                elif ev.type == alsaseq.MIDI_EVENT_CONTROLLER:
+                elif ev.type == MIDI_EVENT_CONTROLLER:
                     event = MidiControllerEvent(
                         data['control.channel'],
                         data['control.param'],
                         data['control.value']
                     )
-                elif ev.type == alsaseq.MIDI_EVENT_PITCH:
+                elif ev.type == MIDI_EVENT_PITCH:
                     event = MidiPitchbendEvent(
                         data['control.channel'],
                         data['control.value']

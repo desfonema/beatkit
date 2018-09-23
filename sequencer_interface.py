@@ -1,22 +1,34 @@
-from pyalsa import alsaseq as seq
+from pyalsa import alsaseq
 
-MIDI_EVENT_NOTE_ON = seq.SEQ_EVENT_NOTEON
-MIDI_EVENT_NOTE_OFF = seq.SEQ_EVENT_NOTEOFF
-MIDI_EVENT_CONTROLLER = seq.SEQ_EVENT_CONTROLLER
-MIDI_EVENT_PITCH = seq.SEQ_EVENT_PITCHBEND
+MIDI_EVENT_NOTE_ON = alsaseq.SEQ_EVENT_NOTEON
+MIDI_EVENT_NOTE_OFF = alsaseq.SEQ_EVENT_NOTEOFF
+MIDI_EVENT_CONTROLLER = alsaseq.SEQ_EVENT_CONTROLLER
+MIDI_EVENT_PITCH = alsaseq.SEQ_EVENT_PITCHBEND
 
-class alsaseq:
+SEQ_PORT_CAP_WRITE = alsaseq.SEQ_PORT_CAP_WRITE
+SEQ_PORT_CAP_SUBS_WRITE = alsaseq.SEQ_PORT_CAP_SUBS_WRITE
+SEQ_PORT_CAP_READ = alsaseq.SEQ_PORT_CAP_READ
+SEQ_PORT_CAP_SUBS_READ = alsaseq.SEQ_PORT_CAP_SUBS_READ
+SEQ_PORT_TYPE_APPLICATION = alsaseq.SEQ_PORT_TYPE_APPLICATION
+
+SeqEvent = alsaseq.SeqEvent
+
+class SequencerInterface:
     def __init__(self, name):
-        self.seq = seq.Sequencer(clientname=name)
+        self.seq = alsaseq.Sequencer(clientname=name)
         self.intput = self.seq.create_simple_port(
             'Midi Input', 
-            seq.SEQ_PORT_TYPE_MIDI_GENERIC | seq.SEQ_PORT_TYPE_APPLICATION,
-            seq.SEQ_PORT_CAP_WRITE | seq.SEQ_PORT_CAP_SUBS_WRITE,
+            SEQ_PORT_TYPE_APPLICATION,
+            SEQ_PORT_CAP_WRITE | SEQ_PORT_CAP_SUBS_WRITE,
         )
         self.ports = {}
     
     def create_output(self, name):
-        port_id = self.seq.create_simple_port(name, seq.SEQ_PORT_TYPE_APPLICATION, seq.SEQ_PORT_CAP_READ | seq.SEQ_PORT_CAP_SUBS_READ)
+        port_id = self.seq.create_simple_port(
+            name,
+            SEQ_PORT_TYPE_APPLICATION,
+            SEQ_PORT_CAP_READ | SEQ_PORT_CAP_SUBS_READ
+        )
         self.ports[name] = port_id
         return port_id
 
@@ -29,7 +41,7 @@ class alsaseq:
     def send_output(self, port, event_type, event_data):
         if not isinstance(port, int): return
 
-        ev = seq.SeqEvent(type=event_type)
+        ev = SeqEvent(type=event_type)
         ev.source = (self.seq.client_id, port)
         ev.set_data(event_data)
         self.seq.output_event(ev)

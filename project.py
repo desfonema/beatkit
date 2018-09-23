@@ -2,7 +2,7 @@ import uuid
 from copy import deepcopy
 from bisect import bisect_left
 
-from audio.alsaseq import (
+from sequencer_interface import (
     MIDI_EVENT_NOTE_ON as NOTE_ON,
     MIDI_EVENT_NOTE_OFF as NOTE_OFF,
 )

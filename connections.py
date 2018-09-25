@@ -7,14 +7,16 @@ from sequencer_interface import (
 
 seq = SequencerInterface('beatkit')
 
+
 def get_ports():
-    #Get MIDI Input ports LIST
+    # Get MIDI Input ports LIST
     ports = {}
     required_cap = SEQ_PORT_CAP_WRITE | SEQ_PORT_CAP_SUBS_WRITE
 
     for client_name, client_id, client_ports in seq.seq.connection_list():
         for port_name, port_id, properties in client_ports:
-            capability = seq.seq.get_port_info(port_id, client_id).get('capability', 0)
+            capability = seq.seq.get_port_info(
+                port_id, client_id).get('capability', 0)
             if capability & required_cap == required_cap:
                 if port_name.startswith(client_name):
                     name = port_name
@@ -32,6 +34,6 @@ def connect():
         dest_id, dest_port = data
         if dest_id == seq.seq.client_id:
             continue
-        if not port_name in seq.ports:
+        if port_name not in seq.ports:
             source_port = seq.create_output(port_name)
             seq.connect(source_port, dest_id, dest_port)

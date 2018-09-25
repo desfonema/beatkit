@@ -1,6 +1,5 @@
 import Queue
 import threading
-from time import sleep
 from util import set_thread_name
 
 from sequencer_interface import (
@@ -37,15 +36,16 @@ class Event(object):
 
 class KeyboardDownEvent(Event):
     event_type = EVENT_KEY_DOWN
-    
+
     def __init__(self, key_code, char=None):
 
         self.key_code = key_code
         self.char = char
 
+
 class KeyboardUpEvent(Event):
     event_type = EVENT_KEY_UP
-    
+
     def __init__(self, key_code, char=None):
 
         self.key_code = key_code
@@ -54,7 +54,7 @@ class KeyboardUpEvent(Event):
 
 class MidiNoteEvent(Event):
     event_type = EVENT_MIDI_NOTE
-    
+
     def __init__(self, midi_event_type, channel, note, velocity):
         self.midi_event_type = midi_event_type
         self.channel = channel
@@ -64,7 +64,7 @@ class MidiNoteEvent(Event):
 
 class MidiControllerEvent(Event):
     event_type = EVENT_MIDI_CONTROLLER
-    
+
     def __init__(self, channel, param, value):
         self.midi_event_type = MIDI_EVENT_CONTROLLER
         self.channel = channel
@@ -74,13 +74,13 @@ class MidiControllerEvent(Event):
 
 class MidiPitchbendEvent(Event):
     event_type = EVENT_MIDI_PITCHBEND
-    
+
     def __init__(self, channel, value):
         self.midi_event_type = MIDI_EVENT_PITCH
         self.channel = channel
         self.value = value
 
-        
+
 class QuitEvent(Event):
     event_type = EVENT_QUIT
 
@@ -98,13 +98,6 @@ class MidiInThread(threading.Thread):
         self._run.set()
 
     def run(self):
-        accepted_events = [
-            MIDI_EVENT_NOTE_ON,
-            MIDI_EVENT_NOTE_OFF,
-            MIDI_EVENT_CONTROLLER,
-            MIDI_EVENT_PITCH,
-        ]
-
         while self._run.is_set():
             for ev in self.seq.event_input():
                 data = ev.get_data()
@@ -141,6 +134,6 @@ class MidiInThread(threading.Thread):
                     continue
 
                 put(event)
-        
+
     def stop(self):
         self._run.clear()

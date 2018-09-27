@@ -2,14 +2,14 @@ import uuid
 
 try:
     import prctl
-except:
+except Exception:
     pass
 
 
 def set_thread_name(name):
     try:
         prctl.set_name(name)
-    except:
+    except Exception:
         pass
 
 

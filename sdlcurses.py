@@ -5,6 +5,11 @@ from util import set_thread_name
 import events
 import keys
 
+KEY_EVENTS = [events.EVENT_KEY_DOWN, events.EVENT_KEY_UP]
+EXIT_FIELD_KEYS = [
+    keys.KEY_ENTER, keys.KEY_UP, keys.KEY_DOWN, keys.KEY_TAB,
+    keys.KEY_STAB, keys.KEY_ESC
+]
 
 class Screen():
     def __init__(self):
@@ -13,7 +18,7 @@ class Screen():
         self.screen = pygame.display.set_mode(size)
         self.clock = pygame.time.Clock()
         self.font = pygame.font.Font('basis33.ttf', 16)
-        text = self.font.render('M', False, (255,255,255), (0,0,0))
+        text = self.font.render('M', False, (255, 255, 255), (0, 0, 0))
         self.ux, self.uy = text.get_size()
         self._font_render_cache = {}
 
@@ -21,18 +26,18 @@ class Screen():
         self.frames = time
 
     def addstr(self, y, x, text, attr=None):
-        color = (255, 255, 31) if bool(attr) else (255,255,255)
+        color = (255, 255, 31) if bool(attr) else (255, 255, 255)
         text_key = (text, color)
 
         text_render = self._font_render_cache.get(text_key, None)
         if not text_render:
-            text_render = self.font.render(text, False, color, (0,0,0))
+            text_render = self.font.render(text, False, color, (0, 0, 0))
             self._font_render_cache[text_key] = text_render
 
         x1, y1 = self.ux*x, self.uy*y
         w, h = text_render.get_size()
         self.screen.fill(pygame.Color("black"), (x1, y1, w, h))
-        self.screen.blit(text_render, (x1 ,y1))
+        self.screen.blit(text_render, (x1, y1))
 
     def refresh(self, *args):
         pygame.display.flip()
@@ -42,28 +47,29 @@ class Screen():
         self.screen.fill(pygame.Color("black"))
 
     def textbox(self, y, x, width, value="", edit=False):
-        #Draw a textbox and return the exit key
+        # Draw a textbox and return the exit key
         value = str(value)
         cursor = '_' if edit else ''
 
         attr = keys.A_BOLD if edit else None
-        self.addstr(y, x, '[{value: <{width}}]'.format(value=value+cursor, width=width), attr)
+        self.addstr(y, x, '[{value: <{width}}]'.format(value=value+cursor,
+                                                       width=width), attr)
         self.refresh()
         k = None
         while edit:
             try:
                 ev = events.get()
-            except:
+            except Exception:
                 continue
 
-            if ev.event_type not in [events.EVENT_KEY_DOWN, events.EVENT_KEY_UP]:
+            if ev.event_type not in KEY_EVENTS:
                 return 0, ev
 
             if ev.event_type == events.EVENT_KEY_UP:
                 continue
 
             k = ev.key_code
-            if k in [keys.KEY_ENTER, keys.KEY_UP, keys.KEY_DOWN, keys.KEY_TAB, keys.KEY_STAB, keys.KEY_ESC]:
+            if k in EXIT_FIELD_KEYS:
                 edit = False
             elif k in [keys.KEY_LEFT, keys.KEY_RIGHT]:
                 if value.isdigit():
@@ -76,32 +82,36 @@ class Screen():
                 value = value[:-1]
             elif ev.char and len(value) < width:
                 value += ev.char
-        
-            self.addstr(y, x, '[{value: <{width}}]'.format(value=value+'_', width=width), attr)
+
+            self.addstr(y, x, '[{value: <{width}}]'
+                              .format(value=value+'_', width=width), attr)
             self.refresh()
 
         return k, value
 
     def listbox(self, y, x, width, value="", options=None, edit=False):
-        #Draw a textbox and return the exit key
+        # Draw a textbox and return the exit key
         value = str(value)
         options = ['Undefined'] if options is None else options
 
         attr = keys.A_BOLD if edit else None
-        self.addstr(y, x, '[< {value: <{width}} >]'.format(value=value, width=width-4), attr)
+        self.addstr(y, x, '[< {value: <{width}} >]'.format(
+            value=value,
+            width=width-4
+        ), attr)
         self.refresh()
         k = None
         while edit:
             try:
                 ev = events.get()
-            except:
+            except Exception:
                 continue
 
             if ev.event_type != events.EVENT_KEY_DOWN:
                 continue
 
             k = ev.key_code
-            if k in [keys.KEY_ENTER, keys.KEY_UP, keys.KEY_DOWN, keys.KEY_TAB, keys.KEY_STAB, keys.KEY_ESC]:
+            if k in EXIT_FIELD_KEYS:
                 edit = False
             elif k in [keys.KEY_LEFT, keys.KEY_RIGHT]:
                 if value in options:
@@ -112,8 +122,9 @@ class Screen():
                     pos = 0
                 value = options[pos]
                 edit = False
-        
-            self.addstr(y, x, '[< {value: <{width}} >]'.format(value=value, width=width-4), attr)
+
+            self.addstr(y, x, '[< {value: <{width}} >]'
+                              .format(value=value, width=width-4), attr)
             self.refresh()
 
         return k, value
@@ -182,15 +193,17 @@ class PyGameThread(threading.Thread):
 
                     events.put(events.KeyboardDownEvent(event.key, event.unicode))
                 elif event.type == pygame.KEYUP:
-                    events.put(events.KeyboardUpEvent(event.key, chr(event.key & 0xff)))
+                    events.put(events.KeyboardUpEvent(event.key,
+                                                      chr(event.key & 0xff)))
             clock.tick(120)
 
     def stop(self):
         self._run.clear()
 
+
 class Menu(object):
-    def __init__(self, scr, commands = []):
-        self.commands = commands
+    def __init__(self, scr, commands=None):
+        self.commands = commands or []
         self.scr = scr
 
     def run(self):
@@ -199,7 +212,7 @@ class Menu(object):
         while True:
             try:
                 ev = events.get()
-            except:
+            except Exception:
                 continue
 
             if ev.event_type != events.EVENT_KEY_DOWN:
@@ -218,7 +231,7 @@ class Menu(object):
                 curr_command += ev.char
             self.print_commands(curr_command)
 
-        cmd = curr_command.split(' ',1)
+        cmd = curr_command.split(' ', 1)
         if len(cmd) == 1:
             return cmd[0], None
         return cmd[0], cmd[1]
@@ -237,7 +250,7 @@ class Menu(object):
             y += 1
 
         self.scr.addstr(y, 0, ':{}'.format(command_line))
-        self.scr.refresh(0,0, 0,0, 30,100)
+        self.scr.refresh(0, 0, 0, 0, 30, 100)
 
     def mprint(self, y, x, menu):
         attr = 0
@@ -253,27 +266,28 @@ if __name__ == "__main__":
     scr = initscr()
     keychars = PyGameThread()
     keychars.start()
-    scr.addstr(1,1,'Hello')
-    scr.addstr(2,1,'Hello')
-    scr.addstr(3,2,'Hello')
+    scr.addstr(1, 1, 'Hello')
+    scr.addstr(2, 1, 'Hello')
+    scr.addstr(3, 2, 'Hello')
     scr.refresh()
     while True:
         try:
             ev = events.get()
-        except:
+        except Exception:
             continue
 
         if ev.event_type == events.EVENT_KEY_DOWN:
             if ev.key_code == pygame.K_q:
                 break
-        scr.addstr(1,1,'Hello')
-        scr.addstr(2,1,'Hello')
-        scr.addstr(3,2,'Hello')
+        scr.addstr(1, 1, 'Hello')
+        scr.addstr(2, 1, 'Hello')
+        scr.addstr(3, 2, 'Hello')
         scr.refresh()
-    scr.textbox(4,1,30, 'Test Value', edit=True)
-    scr.listbox(4,1,30, 'Test Value', options=['aa', 'bb', 'cc'],edit=True)
+    scr.textbox(4, 1, 30, 'Test Value', edit=True)
+    scr.listbox(4, 1, 30, 'Test Value',
+                options=['aa', 'bb', 'cc'], edit=True)
 
-    command, parameters = Menu(scr, commands = [
+    command, parameters = Menu(scr, commands=[
         ('n', ['_New']),
         ('o', ['_Open']),
         ('s', ['_Save']),

@@ -1,3 +1,9 @@
+"""
+Track Modules.
+
+Has the base Track class from which all other track types derive.
+"""
+
 from copy import deepcopy
 from bisect import bisect_left
 
@@ -33,46 +39,134 @@ class Track(object):
     track_type = TRACK_TYPE_DUMMY
     # Track name
     name = ''
+    # Midi Port (Name of the synth to send events to)
     midi_port = 'Undefined'
 
     def len(self):
+        """
+        Return the lenght in beats
+        """
         pass
 
     def resize(self, lenght):
+        """
+        Change the length in beats, copying notes to fill space when expanded.
+        """
         pass
 
     def note_on(self, time, channel, note, velocity):
+        """
+        Add a note on event to the sequencer data, producing sound as side
+        effect
+        """
         pass
 
     def note_off(self, time, channel, note):
+        """
+        Add a note off event to the sequencer data, producing sound as side
+        effect
+        """
+        pass
+
+    def contol(self, time, value, param, channel):
+        """
+        Add a control change event to the sequencer data, and forward to the
+        sequencer as side effect
+        """
+        pass
+
+    def pitchbend(self, time, value, channel):
+        """
+        Add pitchbend event to the sequencer data, and forward to the
+        sequencer as side effect
+        """
+        pass
+
+    def seq_note_on(self, channel, note, velocity):
+        """
+        Send note_on event to sequencer
+        """
+        pass
+
+    def seq_note_off(self, channel, note):
+        """
+        Send note_off event to sequencer
+        """
+        pass
+
+    def seq_contol(self, value, param, channel):
+        """
+        Send control change event to the sequencer.
+        """
+        pass
+
+    def seq_pitchbend(self, value, channel):
+        """
+        Send pitchbend event to the sequencer.
+        """
         pass
 
     def quantize(self, time, value):
+        """
+        Set quantization mask to a beat. Must not alter the original data so it
+        can be changed at a later time
+        """
         pass
 
     def clear(self, time):
+        """
+        Remove all notes starting at a given beat
+        """
         pass
 
     def play_range(self, prev_time, curr_time):
+        """
+        Play all events between prev_time <= event_time <= curr_time
+        """
         pass
 
     def shift(self, time):
+        """
+        Shift all notes by a positive or negative number of beats
+        """
         pass
 
     def transpose(self, notes):
+        """
+        Shift all notes by a number of semitones
+        """
         pass
 
     def bind(self):
+        """
+        Set the real midi port number for the midi port name
+        """
         self._midi_port = seq.ports.get(self.midi_port)
 
     def stop(self):
+        """
+        Send a note_off for all events
+        """
         pass
 
     def dump(self):
+        """
+        Return serialized data as dict
+        """
         pass
 
     def load(self, data):
+        """
+        Load from serialized data as dict
+        """
         pass
+
+    def __str__(self):
+        """
+        Return a string of length self.len() where each character represents
+        the data in that beat
+        """
+        return ' ' * self.len()
 
 
 class DrumTrack(Track):
@@ -98,10 +192,7 @@ class DrumTrack(Track):
         self.data = tmp_data
 
     def note_on(self, time, channel, note, velocity):
-        if self._midi_port is None:
-            seq.note_on(self._midi_port, self.note, self.midi_channel, 127)
-        if time < 0:
-            return
+        self.seq_note_on(channel, note, velocity)
 
         nextval = {' ': '1', '1': '2', '2': '3', '3': '4', '4': ' '}
         note_pos = []
@@ -111,8 +202,9 @@ class DrumTrack(Track):
             time = note_pos.index(note)
             self.data[time] = nextval[self.data[time]]
 
-    def note_off(self, time, channel, note):
-        pass
+    def seq_note_on(self, channel, note, velocity):
+        if self._midi_port is None:
+            seq.note_on(self._midi_port, self.note, self.midi_channel, 127)
 
     def quantize(self, time, value):
         if value != "0" and self.data[int(time)] != ' ':
@@ -159,6 +251,9 @@ class DrumTrack(Track):
 
             if play_note:
                 seq.note_on(self._midi_port, self.note, self.midi_channel, 127)
+
+    def __str__(self):
+        return ''.join(self.data)
 
 
 class MidiTrack(Track):
@@ -250,26 +345,23 @@ class MidiTrack(Track):
         self.stop()
 
     def note_on(self, time, channel, note, velocity):
-        if self._midi_port is not None:
-            if self.midi_channel != CHANNEL_ALL:
-                tmp_channel = self.midi_channel
-            seq.note_on(self._midi_port, note, tmp_channel, velocity)
-        if time < 0:
-            return
-
+        self.seq_note_on(channel, note, velocity)
         time_on = ntime(time) % self.len()
         self.data.append([time_on, None, channel, note, velocity])
         self._state[note] = time_on
         self.rebuild_sequence()
 
-    def note_off(self, time, channel, note):
-        if self._midi_port is not None:
-            if self.midi_channel != CHANNEL_ALL:
-                tmp_channel = self.midi_channel
-            seq.note_off(self._midi_port, note, tmp_channel)
-        if time < 0:
+    def seq_note_on(self, channel, note, velocity):
+        if self._midi_port is None:
             return
 
+        if self.midi_channel != CHANNEL_ALL:
+            channel = self.midi_channel
+
+        seq.note_on(self._midi_port, note, channel, velocity)
+
+    def note_off(self, time, channel, note):
+        self.seq_note_off(channel, note)
         if note not in self._state:
             return
 
@@ -284,6 +376,15 @@ class MidiTrack(Track):
 
         del self._state[note]
         self.rebuild_sequence()
+
+    def seq_note_off(self, channel, note):
+        if self._midi_port is None:
+            return
+
+        if self.midi_channel != CHANNEL_ALL:
+            channel = self.midi_channel
+
+        seq.note_off(self._midi_port, note, channel)
 
     def quantize(self, time, value):
         self.qmap[int(time)] = int(value)

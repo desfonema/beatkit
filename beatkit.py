@@ -13,6 +13,7 @@ from connections import seq, connect
 from track import (
     TRACK_TYPE_DRUM,
     TRACK_TYPE_BASSLINE,
+    CHANNEL_ALL,
 )
 
 from sequencer_interface import (
@@ -56,7 +57,7 @@ class TrackEditor(object):
                     track.bind()
             elif self.pos == 2:
                 channel_id = 'Original'
-                if track.midi_channel < project.CHANNEL_ALL:
+                if track.midi_channel < CHANNEL_ALL:
                     channel_id = track.midi_channel
                 options = ['Original'] + [str(p) for p in range(16)]
                 k, v = scr.listbox(2, 15, 30, channel_id, options=options,
@@ -64,7 +65,7 @@ class TrackEditor(object):
                 if k and v.isdigit():
                     track.midi_channel = int(v)
                 elif k:
-                    track.midi_channel = project.CHANNEL_ALL
+                    track.midi_channel = CHANNEL_ALL
             elif self.pos == 3:
                 k, v = scr.textbox(3, 15, 30, track.note, edit=True)
                 if k and v.isdigit():
@@ -76,9 +77,9 @@ class TrackEditor(object):
                 self.pos = (self.pos - 1) % fields
             elif not k and v.event_type == events.EVENT_MIDI_NOTE:
                 if v.midi_event_type == MIDI_EVENT_NOTE_ON:
-                    track.note_on(-1, v.channel, v.note, 127)
+                    track.seq_note_on(v.channel, v.note, 127)
                 elif v.midi_event_type == MIDI_EVENT_NOTE_OFF:
-                    track.note_off(-1, v.channel, v.note)
+                    track.seq_note_off(v.channel, v.note)
             elif k in [keys.KEY_ENTER, keys.KEY_ESC]:
                 break
         scr.erase()
@@ -87,7 +88,7 @@ class TrackEditor(object):
         scr = self.scr
         track = self.track
         channel_id = 'Original'
-        if track.midi_channel < project.CHANNEL_ALL:
+        if track.midi_channel < CHANNEL_ALL:
             channel_id = track.midi_channel
         items = [
             ('Name', track.name),
@@ -182,15 +183,23 @@ class PatternEditor(object):
 
             if ev.event_type == events.EVENT_MIDI_NOTE:
                 # Process input values
-                ntime = self.player.get_time() if self.rec else -1
+                ntime = self.player.get_time()
                 channel_note = (ev.channel, ev.note)
                 if ev.midi_event_type == MIDI_EVENT_NOTE_ON:
                     if channel_note not in midi_state:
-                        track.note_on(ntime, ev.channel, ev.note, ev.velocity)
+                        if self.rec:
+                            track.note_on(ntime, ev.channel, ev.note,
+                                          ev.velocity)
+                        else:
+                            track.seq_note_on(ev.channel, ev.note, ev.velocity)
                         midi_state.add(channel_note)
                 elif ev.midi_event_type == MIDI_EVENT_NOTE_OFF:
                     if channel_note in midi_state:
-                        track.note_off(ntime, ev.channel, ev.note)
+                        if self.rec:
+                            track.note_off(ntime, ev.channel, ev.note)
+                        else:
+                            track.seq_note_off(ev.channel, ev.note)
+
                         try:
                             midi_state.remove(channel_note)
                         except Exception:

@@ -13,6 +13,8 @@ from util import ntime
 from sequencer_interface import (
     MIDI_EVENT_NOTE_ON as NOTE_ON,
     MIDI_EVENT_NOTE_OFF as NOTE_OFF,
+    MIDI_EVENT_CONTROLLER as CONTROLLER,
+    MIDI_EVENT_PITCH as PITCH,
 )
 
 TRACK_TYPE_DUMMY = 0
@@ -68,7 +70,7 @@ class Track(object):
         """
         pass
 
-    def contol(self, time, value, param, channel):
+    def control(self, time, value, param, channel):
         """
         Add a control change event to the sequencer data, and forward to the
         sequencer as side effect
@@ -300,12 +302,12 @@ class MidiTrack(Track):
             notes_added = False
             time_base = old_len * i
             for item in self.data:
-                time_on, time_off, channel, note, velocity = item
+                time_on, time_off, channel, note, velocity, ev_type = item
                 time_on = time_base + time_on
                 time_off = (time_base + time_off) % lenght
                 if time_on < lenght:
                     tmp_data.append(
-                        (time_on, time_off, channel, note, velocity)
+                        (time_on, time_off, channel, note, velocity, ev_type)
                     )
                     notes_added = True
             i += 1
@@ -336,7 +338,10 @@ class MidiTrack(Track):
             # Add track to old tracks
             if len(item) == 4:
                 time_on, time_off, note, velocity = item
-                item = (time_on, time_off, 0, note, velocity)
+                item = (time_on, time_off, 0, note, velocity, NOTE_ON)
+            elif len(item) == 5:
+                time_on, time_off, channel, note, velocity = item
+                item = (time_on, time_off, channel, note, velocity, NOTE_ON)
 
             self.data.append(item)
 
@@ -346,8 +351,8 @@ class MidiTrack(Track):
 
     def note_on(self, time, channel, note, velocity):
         self.seq_note_on(channel, note, velocity)
-        time_on = ntime(time) % self.len()
-        self.data.append([time_on, None, channel, note, velocity])
+        time_on = ntime(time % self.len())
+        self.data.append([time_on, None, channel, note, velocity, NOTE_ON])
         self._state[note] = time_on
         self.rebuild_sequence()
 
@@ -365,7 +370,7 @@ class MidiTrack(Track):
         if note not in self._state:
             return
 
-        time_off = ntime(time) % self.len()
+        time_off = ntime(time % self.len())
         time_on = self._state[note]
         item = None
         for item in self.data:
@@ -386,6 +391,21 @@ class MidiTrack(Track):
 
         seq.note_off(self._midi_port, note, channel)
 
+    def pitchbend(self, time, value, channel):
+        self.seq_pitchbend(value, channel)
+        time_on = ntime(time % self.len())
+        self.data.append([time_on, None, channel, None, value, PITCH])
+        self.rebuild_sequence()
+
+    def seq_pitchbend(self, value, channel):
+        if self._midi_port is None:
+            return
+
+        if self.midi_channel != CHANNEL_ALL:
+            channel = self.midi_channel
+
+        seq.set_pitchbend(self._midi_port, value, channel)
+
     def quantize(self, time, value):
         self.qmap[int(time)] = int(value)
         self.rebuild_sequence()
@@ -393,7 +413,7 @@ class MidiTrack(Track):
     def clear(self, time):
         mark_deletion = []
         for item in self.data:
-            time_on, time_off, channel, note, velocity = item
+            time_on, time_off, channel, note, velocity, ev_type = item
             if time <= time_on < time + 1:
                 mark_deletion.append(item)
                 channel = channel & 255 or self.midi_channel
@@ -412,9 +432,10 @@ class MidiTrack(Track):
                 (time_off-time) % clen,
                 channel,
                 note,
-                velocity
+                velocity,
+                ev_type
             )
-            for time_on, time_off, channel, note, velocity
+            for time_on, time_off, channel, note, velocity, ev_type
             in self.data
             if time_on is not None and time_off is not None
         ]
@@ -426,7 +447,16 @@ class MidiTrack(Track):
         self.beat_data = [' '] * self._len
         if not self.data:
             return
-        for time_on, time_off, channel, note, velocity in self.data:
+        for time_on, time_off, channel, note, velocity, ev_type in self.data:
+            if ev_type == NOTE_ON:
+                self._data_seq_add_note(time_on, time_off, channel, note,
+                                        velocity)
+            elif ev_type == PITCH:
+                self._data_seq_add_pitch(time_on, channel, velocity)
+
+        self.data_seq.sort()
+
+    def _data_seq_add_note(self, time_on, time_off, channel, note, velocity):
             itime = int(time_on)
             data_repr = '*'
             qvalue = self.qmap[itime]
@@ -436,8 +466,10 @@ class MidiTrack(Track):
                 qdelta = time_on - round(time_on * qvalue) / qvalue
 
             time_on = (time_on - qdelta) % self._len
+
             if self.midi_channel != CHANNEL_ALL:
                 self.midi_channel
+
             self.data_seq.append((time_on, NOTE_ON, channel, note, velocity))
 
             if time_off:
@@ -445,7 +477,18 @@ class MidiTrack(Track):
                 self.data_seq.append((time_off, NOTE_OFF, channel, note, 0))
 
             self.beat_data[itime] = data_repr
-        self.data_seq.sort()
+
+    def _data_seq_add_pitch(self, time_on, channel, value):
+            itime = int(time_on)
+            time_on = time_on % self._len
+
+            if self.midi_channel != CHANNEL_ALL:
+                self.midi_channel
+
+            self.data_seq.append((time_on, PITCH, channel, None, value))
+
+            if self.beat_data[itime] == ' ':
+                self.beat_data[itime] = '#'
 
     def play_range(self, prev_time, curr_time):
         if self._midi_port is None:
@@ -473,4 +516,7 @@ class MidiTrack(Track):
             return
 
         for time, event, channel, note, velocity in self.data_seq:
-            seq.note_off(self._midi_port, note, channel)
+            if event == NOTE_OFF:
+                seq.note_off(self._midi_port, note, channel)
+
+            # TODO: Add controller and pitchbend

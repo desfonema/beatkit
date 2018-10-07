@@ -211,7 +211,10 @@ class PatternEditor(object):
                 seq.set_control(track._midi_port, ev.value, ev.param,
                                 ev.channel)
             elif ev.event_type == events.EVENT_MIDI_PITCHBEND:
-                seq.set_pitchbend(track._midi_port, ev.value, ev.channel)
+                if self.rec:
+                    track.pitchbend(ntime, ev.value, ev.channel)
+                else:
+                    track.seq_pitchbend(ev.value, ev.channel)
 
             elif ev.event_type == events.EVENT_KEY_DOWN:
                 k = ev.key_code

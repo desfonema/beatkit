@@ -162,6 +162,7 @@ class PatternEditor(object):
 
         prev_time = None
         repaint = 0
+        pad.find_font_size(self.pattern.len*3+20, len(self.pattern.tracks))
         while True:
             try:
                 ev = events.get()
@@ -178,6 +179,13 @@ class PatternEditor(object):
                 break
 
             if ev.event_type == events.EVENT_REFRESH:
+                self.paint()
+                continue
+
+            if ev.event_type == events.EVENT_RESIZE:
+                pad.resize(ev.width, ev.height)
+                pad.find_font_size(self.pattern.len*3+20,
+                                   len(self.pattern.tracks))
                 self.paint()
                 continue
 
@@ -690,15 +698,15 @@ def main():
     midi_input = events.MidiInThread(seq)
     midi_input.start()
 
-    pated = ProjectEditor(proj, screen, player)
+    app = ProjectEditor(proj, screen, player)
 
     try:
-        pated.run()
+        app.run()
     except Exception:
         print traceback.format_exc()
 
     with open('state.json', 'w') as f:
-        f.write(json.dumps(pated.project.dump(), indent=2))
+        f.write(json.dumps(app.project.dump(), indent=2))
 
     player.quit()
     keychars.stop()

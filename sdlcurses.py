@@ -11,16 +11,36 @@ EXIT_FIELD_KEYS = [
     keys.KEY_STAB, keys.KEY_ESC
 ]
 
+FONT_NAME = 'SpaceMono-Bold.ttf'
+
+
 class Screen():
     def __init__(self):
         self.frames = 120
-        size = width, height = 1024, 700
-        self.screen = pygame.display.set_mode(size)
+        size = self.width, self.height = 1024, 700
+        self.screen = pygame.display.set_mode(size, pygame.RESIZABLE)
         self.clock = pygame.time.Clock()
-        self.font = pygame.font.Font('basis33.ttf', 16)
-        text = self.font.render('M', False, (255, 255, 255), (0, 0, 0))
-        self.ux, self.uy = text.get_size()
+        self.set_font_size(16)
+
+    def set_font_size(self, size):
+        self.font = pygame.font.Font(FONT_NAME, size)
+        self.ux, self.uy = self.font.size('#')
         self._font_render_cache = {}
+
+    def find_font_size(self, cols, rows):
+        """
+        Find the font size for the needed cols and rows on current resolution
+        """
+        tmp_size = 1
+        ux, uy = pygame.font.Font(FONT_NAME, tmp_size).size('#')
+        cols_ux, rows_uy = ux * cols, uy * rows
+        while cols_ux < self.width and rows_uy < self.height:
+            size = tmp_size
+            tmp_size += 1
+            ux, uy = pygame.font.Font(FONT_NAME, tmp_size).size('#')
+            cols_ux, rows_uy = ux * cols, uy * rows
+
+        self.set_font_size(size)
 
     def timeout(self, time):
         self.frames = time
@@ -42,6 +62,12 @@ class Screen():
     def refresh(self, *args):
         pygame.display.flip()
         self.clock.tick(self.frames)
+
+    def resize(self, width, height):
+        size = self.width, self.height = width, height
+        print size
+        self.screen = pygame.display.set_mode(size, pygame.RESIZABLE)
+        self.refresh()
 
     def erase(self):
         self.screen.fill(pygame.Color("black"))
@@ -168,6 +194,10 @@ class PyGameThread(threading.Thread):
 
                 if event.type == pygame.ACTIVEEVENT:
                     events.put(events.RefreshEvent())
+                    continue
+
+                if event.type == pygame.VIDEORESIZE:
+                    events.put(events.ResizeEvent(event.w, event.h))
                     continue
 
                 if event.type not in [pygame.KEYDOWN, pygame.KEYUP]:

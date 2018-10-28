@@ -201,7 +201,7 @@ class DrumTrack(Track):
         for octave in xrange(6):
             note_pos += [n+(12*octave) for n in [48, 50, 52, 53, 55, 57, 59]]
         if note in note_pos:
-            time = note_pos.index(note)
+            time = note_pos.index(note) % self.len()
             self.data[time] = nextval[self.data[time]]
 
     def seq_note_on(self, channel, note, velocity):
@@ -410,14 +410,16 @@ class MidiTrack(Track):
         self.qmap[int(time)] = int(value)
         self.rebuild_sequence()
 
-    def clear(self, time):
+    def clear(self, time, event_type=None):
         mark_deletion = []
         for item in self.data:
             time_on, time_off, channel, note, velocity, ev_type = item
             if time <= time_on < time + 1:
-                mark_deletion.append(item)
-                channel = channel & 255 or self.midi_channel
-                seq.note_off(self._midi_port, note, channel)
+                if event_type is None or event_type == ev_type:
+                    mark_deletion.append(item)
+                if ev_type in [NOTE_ON, NOTE_OFF]:
+                    channel = channel & 255 or self.midi_channel
+                    seq.note_off(self._midi_port, note, channel)
 
         for del_item in mark_deletion:
             self.data.remove(del_item)
@@ -448,6 +450,9 @@ class MidiTrack(Track):
         if not self.data:
             return
         for time_on, time_off, channel, note, velocity, ev_type in self.data:
+            if self.midi_channel != CHANNEL_ALL:
+                channel = self.midi_channel
+
             if ev_type == NOTE_ON:
                 self._data_seq_add_note(time_on, time_off, channel, note,
                                         velocity)
@@ -510,6 +515,8 @@ class MidiTrack(Track):
                 seq.note_on(self._midi_port, note, channel, velocity)
             elif event == NOTE_OFF:
                 seq.note_off(self._midi_port, note, channel)
+            elif event == PITCH:
+                self.seq_pitchbend(velocity, channel)
 
     def stop(self):
         if self._midi_port is None:

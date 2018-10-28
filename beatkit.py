@@ -23,6 +23,7 @@ from track import (
 from sequencer_interface import (
     MIDI_EVENT_NOTE_ON,
     MIDI_EVENT_NOTE_OFF,
+    MIDI_EVENT_PITCH,
 )
 
 from player import (
@@ -223,6 +224,7 @@ class PatternEditor(object):
                 seq.set_control(track._midi_port, ev.value, ev.param,
                                 ev.channel)
             elif ev.event_type == events.EVENT_MIDI_PITCHBEND:
+                ntime = self.player.get_time()
                 if self.rec:
                     track.pitchbend(ntime, ev.value, ev.channel)
                 else:
@@ -236,6 +238,7 @@ class PatternEditor(object):
                         ('pl', ['_Pattern _Length']),
                         ('nd', ['_New', '_Drum Channel']),
                         ('nm', ['_New', '_Midi Channel']),
+                        ('cp', ['_Clear _Pitchbend']),
                         ('e', ['_Edit Channel']),
                         ('en', ['_Edit Channel _Name']),
                         ('d', ['_Duplicate Channel']),
@@ -257,6 +260,12 @@ class PatternEditor(object):
                         self.pattern.tracks.append(track)
                         self._current_track = len(self.pattern.tracks) - 1
                         TrackEditor(pad, track).run()
+                    elif command == 'cp':
+                        for i in xrange(track.len()):
+                            track.clear(
+                                i,
+                                MIDI_EVENT_PITCH
+                            )
                     elif command == 'd':
                         tmp_track = track.__class__()
                         tmp_track.load(track.dump())

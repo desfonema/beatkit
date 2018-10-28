@@ -48,7 +48,10 @@ class SequencerInterface:
         ev.source = (self.seq.client_id, port)
         ev.set_data(event_data)
         self.seq.output_event(ev)
-        self.seq.drain_output()
+        try:
+            self.seq.drain_output()
+        except alsaseq.SequencerError:
+            pass
 
     def note_on(self, port, note, channel, velocity):
         self.send_output(port, MIDI_EVENT_NOTE_ON, {

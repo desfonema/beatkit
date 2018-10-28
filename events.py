@@ -17,6 +17,7 @@ EVENT_MIDI_CONTROLLER = 8
 EVENT_MIDI_PITCHBEND = 16
 EVENT_QUIT = 64
 EVENT_REFRESH = 128
+EVENT_RESIZE = 256
 
 
 event_queue = Queue.Queue()
@@ -87,6 +88,14 @@ class QuitEvent(Event):
 
 class RefreshEvent(Event):
     event_type = EVENT_REFRESH
+
+
+class ResizeEvent(Event):
+    event_type = EVENT_RESIZE
+
+    def __init__(self, width, height):
+        self.width = width
+        self.height = height
 
 
 class MidiInThread(threading.Thread):

@@ -1,6 +1,5 @@
 import os
 import time
-import json
 from copy import deepcopy
 import traceback
 
@@ -9,6 +8,11 @@ import keys
 import events
 import project
 from connections import seq, connect
+
+try:
+    import ujson as json
+except ImportError:
+    import json
 
 from track import (
     TRACK_TYPE_DRUM,
